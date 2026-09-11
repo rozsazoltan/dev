@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use wsldisk::{read_registry, status, write_registry, Disk, DiskStatus, MountProbe};
+use wsldisk::{Disk, DiskStatus, MountProbe, read_registry, status, write_registry};
 
 const REGISTRY_FIXTURE: &str = r#"
 [

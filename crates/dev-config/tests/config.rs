@@ -54,7 +54,10 @@ fn configured_root_overrides_the_default_data_root() {
     let config = Config::load_from_path(&config_path, &local_app_data).unwrap();
 
     assert_eq!(config.root(), PathBuf::from(r"D:\Dev"));
-    assert_eq!(config.disk_registry_path(), PathBuf::from(r"D:\Dev\disks.json"));
+    assert_eq!(
+        config.disk_registry_path(),
+        PathBuf::from(r"D:\Dev\disks.json")
+    );
 
     std::fs::remove_dir_all(local_app_data).unwrap();
 }

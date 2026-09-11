@@ -23,17 +23,22 @@ pub struct CreateRequest {
 }
 
 impl CreateRequest {
-    pub fn new(
-        mount_name: &str,
-        size: Option<&str>,
-        path: Option<PathBuf>,
-    ) -> io::Result<Self> {
-        if mount_name.is_empty() || matches!(mount_name, "." | "..") || mount_name.contains(['/', '\\']) {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid disk name"));
+    pub fn new(mount_name: &str, size: Option<&str>, path: Option<PathBuf>) -> io::Result<Self> {
+        if mount_name.is_empty()
+            || matches!(mount_name, "." | "..")
+            || mount_name.contains(['/', '\\'])
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid disk name",
+            ));
         }
         Ok(Self {
             mount_name: mount_name.to_owned(),
-            capacity_bytes: size.map(parse_size).transpose()?.unwrap_or(DEFAULT_CAPACITY_BYTES),
+            capacity_bytes: size
+                .map(parse_size)
+                .transpose()?
+                .unwrap_or(DEFAULT_CAPACITY_BYTES),
             path,
         })
     }
@@ -64,14 +69,20 @@ pub fn parse_size(value: &str) -> io::Result<u64> {
         io::Error::new(io::ErrorKind::InvalidInput, "size must use the GB suffix")
     })?;
     let gigabytes = number.parse::<u64>().map_err(|_| {
-        io::Error::new(io::ErrorKind::InvalidInput, "size must be a positive whole number")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "size must be a positive whole number",
+        )
     })?;
     if gigabytes == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "size must be positive"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "size must be positive",
+        ));
     }
-    gigabytes.checked_mul(1024 * 1024 * 1024).ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "size is too large")
-    })
+    gigabytes
+        .checked_mul(1024 * 1024 * 1024)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "size is too large"))
 }
 
 /// Returns the one new whole-disk device introduced between two `lsblk --json` snapshots.
@@ -105,13 +116,23 @@ pub fn detect_new_disk(before: &str, after: &str) -> io::Result<PathBuf> {
         .collect::<Vec<_>>();
     match added.as_slice() {
         [name] => Ok(PathBuf::from("/dev").join(name)),
-        [] => Err(io::Error::new(io::ErrorKind::NotFound, "no new disk detected")),
-        _ => Err(io::Error::new(io::ErrorKind::InvalidData, "multiple new disks detected")),
+        [] => Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "no new disk detected",
+        )),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "multiple new disks detected",
+        )),
     }
 }
 
 pub trait Process {
-    fn run(&mut self, program: std::ffi::OsString, args: Vec<std::ffi::OsString>) -> io::Result<String>;
+    fn run(
+        &mut self,
+        program: std::ffi::OsString,
+        args: Vec<std::ffi::OsString>,
+    ) -> io::Result<String>;
 }
 
 pub fn create_disk(
@@ -125,19 +146,73 @@ pub fn create_disk(
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("scripts")
         .join("new-dynamic-vhd.ps1");
-    process.run(powershell, vec!["-NoProfile", "-NonInteractive", "-File", script.to_string_lossy().as_ref(), plan.path.to_string_lossy().as_ref(), &plan.capacity_bytes.to_string()]
-        .into_iter().map(OsString::from).collect())?;
+    process.run(
+        powershell,
+        vec![
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            script.to_string_lossy().as_ref(),
+            plan.path.to_string_lossy().as_ref(),
+            &plan.capacity_bytes.to_string(),
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect(),
+    )?;
     let wsl = OsString::from("wsl.exe");
-    let list = |process: &mut dyn Process| process.run(wsl.clone(), vec!["--distribution", distro, "--exec", "lsblk", "--json"].into_iter().map(OsString::from).collect());
+    let list = |process: &mut dyn Process| {
+        process.run(
+            wsl.clone(),
+            vec!["--distribution", distro, "--exec", "lsblk", "--json"]
+                .into_iter()
+                .map(OsString::from)
+                .collect(),
+        )
+    };
     let before = list(process)?;
-    process.run(wsl.clone(), vec!["--mount", plan.path.to_string_lossy().as_ref(), "--vhd", "--bare"].into_iter().map(OsString::from).collect())?;
+    process.run(
+        wsl.clone(),
+        vec![
+            "--mount",
+            plan.path.to_string_lossy().as_ref(),
+            "--vhd",
+            "--bare",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect(),
+    )?;
     let after = list(process)?;
     let device = detect_new_disk(&before, &after)?;
-    let format_result = process.run(wsl.clone(), vec!["--distribution", distro, "--exec", "mkfs.ext4", "-F", device.to_string_lossy().as_ref()].into_iter().map(OsString::from).collect());
-    let detach_result = process.run(wsl, vec!["--unmount", plan.path.to_string_lossy().as_ref()].into_iter().map(OsString::from).collect());
+    let format_result = process.run(
+        wsl.clone(),
+        vec![
+            "--distribution",
+            distro,
+            "--exec",
+            "mkfs.ext4",
+            "-F",
+            device.to_string_lossy().as_ref(),
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect(),
+    );
+    let detach_result = process.run(
+        wsl,
+        vec!["--unmount", plan.path.to_string_lossy().as_ref()]
+            .into_iter()
+            .map(OsString::from)
+            .collect(),
+    );
     format_result?;
     detach_result?;
-    Ok(Disk { path: plan.path.clone(), mount_name: mount_name.to_owned(), capacity_bytes: plan.capacity_bytes })
+    Ok(Disk {
+        path: plan.path.clone(),
+        mount_name: mount_name.to_owned(),
+        capacity_bytes: plan.capacity_bytes,
+    })
 }
 
 /// Creates a disk and persists it only after the entire workflow succeeds.
@@ -308,15 +383,17 @@ pub fn status(
     probe: &dyn MountProbe,
 ) -> io::Result<Vec<DiskStatus>> {
     let selected: Vec<&Disk> = match mount_name {
-        Some(mount_name) => vec![disks
-            .iter()
-            .find(|disk| disk.mount_name == mount_name)
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("disk {mount_name:?} is not registered"),
-                )
-            })?],
+        Some(mount_name) => vec![
+            disks
+                .iter()
+                .find(|disk| disk.mount_name == mount_name)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("disk {mount_name:?} is not registered"),
+                    )
+                })?,
+        ],
         None => disks.iter().collect(),
     };
 
