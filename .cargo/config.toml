@@ -1,0 +1,4 @@
+[alias]
+dev = "run --bin dev --"
+wslctl = "run --bin wslctl --"
+wsldisk = "run --bin wsldisk --"
