@@ -227,12 +227,23 @@ pub fn create_and_register(
     plan: &CreatePlan,
     registry_path: &Path,
 ) -> io::Result<Disk> {
-    let disk = create_disk(process, distro, mount_name, plan)?;
     let mut registry = match read_registry(registry_path) {
         Ok(registry) => registry,
         Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
         Err(error) => return Err(error),
     };
+    let prospective = Disk {
+        path: plan.path.clone(),
+        mount_name: mount_name.to_owned(),
+        capacity_bytes: plan.capacity_bytes,
+    };
+    registry.push(prospective.clone());
+    validate_registry(&registry)?;
+    registry.pop();
+    if let Some(parent) = plan.path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let disk = create_disk(process, distro, mount_name, plan)?;
     registry.push(disk.clone());
     write_registry(registry_path, &registry)?;
     Ok(disk)

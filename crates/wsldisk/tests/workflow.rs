@@ -17,7 +17,10 @@ impl Process for FakeProcess {
 #[test]
 fn create_formats_detected_disk_detaches_then_returns_registry_record() {
     let plan = CreatePlan {
-        path: PathBuf::from(r"D:\Dev\disks\projects.vhdx"),
+        path: std::env::temp_dir().join(format!(
+            "wsldisk-workflow-{}\\projects.vhdx",
+            std::process::id()
+        )),
         capacity_bytes: 68_719_476_736,
         dynamic: true,
     };
@@ -52,7 +55,10 @@ fn create_formats_detected_disk_detaches_then_returns_registry_record() {
 #[test]
 fn formatting_failure_still_detaches_and_never_returns_a_disk() {
     let plan = CreatePlan {
-        path: PathBuf::from(r"D:\Dev\disks\projects.vhdx"),
+        path: std::env::temp_dir().join(format!(
+            "wsldisk-failure-{}\\projects.vhdx",
+            std::process::id()
+        )),
         capacity_bytes: 68_719_476_736,
         dynamic: true,
     };
@@ -78,7 +84,10 @@ fn formatting_failure_still_detaches_and_never_returns_a_disk() {
 #[test]
 fn post_attach_device_detection_failure_still_detaches() {
     let plan = CreatePlan {
-        path: PathBuf::from(r"D:\Dev\disks\projects.vhdx"),
+        path: std::env::temp_dir().join(format!(
+            "wsldisk-detect-{}\\projects.vhdx",
+            std::process::id()
+        )),
         capacity_bytes: 68_719_476_736,
         dynamic: true,
     };
