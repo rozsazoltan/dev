@@ -81,3 +81,29 @@ fn identifier_validation_accepts_names_but_rejects_paths_and_traversal() {
         );
     }
 }
+
+#[test]
+fn saving_root_persists_an_absolute_path() {
+    let local_app_data = temporary_directory("save-root");
+    let config_path = local_app_data.join("dev").join("config.toml");
+    let root = local_app_data.join("workspace");
+
+    let mut config = Config::load_from_path(&config_path, &local_app_data).unwrap();
+    config.set_root(root.clone()).unwrap();
+
+    let reloaded = Config::load_from_path(&config_path, &local_app_data).unwrap();
+    assert_eq!(reloaded.root(), root);
+
+    std::fs::remove_dir_all(local_app_data).unwrap();
+}
+
+#[test]
+fn saving_relative_root_is_rejected() {
+    let local_app_data = temporary_directory("relative-root");
+    let config_path = local_app_data.join("dev").join("config.toml");
+    let mut config = Config::load_from_path(&config_path, &local_app_data).unwrap();
+
+    assert!(config.set_root(PathBuf::from("relative")).is_err());
+
+    std::fs::remove_dir_all(local_app_data).unwrap();
+}
