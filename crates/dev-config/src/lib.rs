@@ -116,7 +116,7 @@ impl Config {
             config_path: config_path.to_path_buf(),
             root: file_config
                 .root
-                .unwrap_or_else(|| local_app_data.join("dev").join("data")),
+                .unwrap_or_else(|| local_app_data.join("dev")),
             default_wsl: file_config.wsl.default,
         })
     }
@@ -127,6 +127,10 @@ impl Config {
 
     pub fn disks_dir(&self) -> PathBuf {
         self.root.join("disks")
+    }
+
+    pub fn disk_registry_path(&self) -> PathBuf {
+        self.root.join("disks.json")
     }
 
     pub fn distros_dir(&self) -> PathBuf {

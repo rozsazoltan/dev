@@ -10,15 +10,16 @@ fn temporary_directory(name: &str) -> PathBuf {
 }
 
 #[test]
-fn missing_config_uses_default_root_and_standard_paths() {
+fn missing_config_uses_root_derived_standard_paths() {
     let local_app_data = temporary_directory("missing-config");
     let config_path = local_app_data.join("dev").join("config.toml");
 
     let config = Config::load_from_path(&config_path, &local_app_data).unwrap();
 
-    let root = local_app_data.join("dev").join("data");
+    let root = local_app_data.join("dev");
     assert_eq!(config.root(), root);
     assert_eq!(config.disks_dir(), root.join("disks"));
+    assert_eq!(config.disk_registry_path(), root.join("disks.json"));
     assert_eq!(config.distros_dir(), root.join("wsl").join("distros"));
     assert_eq!(config.backups_dir(), root.join("wsl").join("backups"));
     assert_eq!(config.tmp_dir(), root.join("tmp"));
@@ -53,6 +54,7 @@ fn configured_root_overrides_the_default_data_root() {
     let config = Config::load_from_path(&config_path, &local_app_data).unwrap();
 
     assert_eq!(config.root(), PathBuf::from(r"D:\Dev"));
+    assert_eq!(config.disk_registry_path(), PathBuf::from(r"D:\Dev\disks.json"));
 
     std::fs::remove_dir_all(local_app_data).unwrap();
 }
