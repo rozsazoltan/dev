@@ -86,7 +86,7 @@ pub fn parse_size(value: &str) -> io::Result<u64> {
 }
 
 /// Returns the one new whole-disk device introduced between two `lsblk --json` snapshots.
-pub fn detect_new_disk(before: &str, after: &str) -> io::Result<PathBuf> {
+pub fn detect_new_disk(before: &str, after: &str) -> io::Result<String> {
     #[derive(Deserialize)]
     struct Lsblk {
         blockdevices: Vec<BlockDevice>,
@@ -115,7 +115,7 @@ pub fn detect_new_disk(before: &str, after: &str) -> io::Result<PathBuf> {
         .map(|device| device.name)
         .collect::<Vec<_>>();
     match added.as_slice() {
-        [name] => Ok(PathBuf::from("/dev").join(name)),
+        [name] => Ok(format!("/dev/{name}")),
         [] => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "no new disk detected",
@@ -196,7 +196,7 @@ pub fn create_disk(
                 "--exec",
                 "/usr/sbin/mkfs.ext4",
                 "-F",
-                device.to_string_lossy().as_ref(),
+                &device,
             ]
             .into_iter()
             .map(OsString::from)

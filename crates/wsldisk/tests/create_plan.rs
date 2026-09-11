@@ -53,10 +53,7 @@ fn detects_the_new_disk_from_lsblk_state_instead_of_assuming_sdb() {
     let before = r#"{"blockdevices":[{"name":"sda","type":"disk"},{"name":"sdc","type":"disk"}]}"#;
     let after = r#"{"blockdevices":[{"name":"sda","type":"disk"},{"name":"sdc","type":"disk"},{"name":"sdd","type":"disk"}]}"#;
 
-    assert_eq!(
-        detect_new_disk(before, after).unwrap(),
-        PathBuf::from("/dev/sdd")
-    );
+    assert_eq!(detect_new_disk(before, after).unwrap(), "/dev/sdd");
 }
 
 #[test]
