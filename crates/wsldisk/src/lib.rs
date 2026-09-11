@@ -227,6 +227,9 @@ pub fn create_and_register(
     plan: &CreatePlan,
     registry_path: &Path,
 ) -> io::Result<Disk> {
+    if let Some(parent) = registry_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let mut registry = match read_registry(registry_path) {
         Ok(registry) => registry,
         Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),

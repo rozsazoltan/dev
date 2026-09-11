@@ -49,10 +49,13 @@ fn run() -> Result<(), Box<dyn Error>> {
     let config = Config::load()?;
     let distro = config.require_default_wsl()?;
     match cli.command {
-        Commands::List => print_value(&read_registry(&config.disk_registry_path())?, cli.json),
+        Commands::List => print_value(
+            &read_registry_or_empty(&config.disk_registry_path())?,
+            cli.json,
+        ),
         Commands::Status { name, all } => {
             let probe = SystemMountProbe { debug: cli.debug };
-            let disks = read_registry(&config.disk_registry_path())?;
+            let disks = read_registry_or_empty(&config.disk_registry_path())?;
             print_value(
                 &status(&disks, if all { None } else { name.as_deref() }, &probe)?,
                 cli.json,
@@ -84,6 +87,14 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
+}
+
+fn read_registry_or_empty(path: &std::path::Path) -> io::Result<Vec<Disk>> {
+    match read_registry(path) {
+        Ok(disks) => Ok(disks),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(error),
+    }
 }
 
 #[derive(serde::Serialize)]
