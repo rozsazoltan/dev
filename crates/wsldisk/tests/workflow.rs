@@ -45,7 +45,12 @@ fn create_formats_detected_disk_detaches_then_returns_registry_record() {
 
     assert_eq!(disk.mount_name, "projects");
     assert_eq!(process.calls.len(), 6);
-    assert!(process.calls[4].1.iter().any(|arg| arg == "mkfs.ext4"));
+    assert!(
+        process.calls[4]
+            .1
+            .iter()
+            .any(|arg| arg == "/usr/sbin/mkfs.ext4")
+    );
     assert!(process.calls[4].1.iter().any(|arg| arg == "root"));
     assert!(process.calls[5].1.iter().any(|arg| arg == "--unmount"));
     assert_eq!(read_registry(&registry).unwrap(), vec![disk]);

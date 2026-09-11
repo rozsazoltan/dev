@@ -194,7 +194,7 @@ pub fn create_disk(
                 "--user",
                 "root",
                 "--exec",
-                "mkfs.ext4",
+                "/usr/sbin/mkfs.ext4",
                 "-F",
                 device.to_string_lossy().as_ref(),
             ]
