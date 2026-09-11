@@ -1,9 +1,6 @@
-use clap::Parser;
-
-#[derive(Parser)]
-#[command(version)]
-struct Cli;
-
 fn main() {
-    Cli::parse();
+    if let Err(error) = dev::run() {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
 }
