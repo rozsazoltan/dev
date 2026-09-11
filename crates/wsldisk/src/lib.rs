@@ -246,7 +246,20 @@ pub fn create_and_register(
     if let Some(parent) = plan.path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let disk = create_disk(process, distro, mount_name, plan)?;
+    let disk = match create_disk(process, distro, mount_name, plan) {
+        Ok(disk) => disk,
+        Err(error) => {
+            if let Err(cleanup_error) = fs::remove_file(&plan.path) {
+                if cleanup_error.kind() != io::ErrorKind::NotFound {
+                    return Err(io::Error::other(format!(
+                        "{error}; additionally failed to remove newly created disk {:?}: {cleanup_error}",
+                        plan.path
+                    )));
+                }
+            }
+            return Err(error);
+        }
+    };
     registry.push(disk.clone());
     write_registry(registry_path, &registry)?;
     Ok(disk)

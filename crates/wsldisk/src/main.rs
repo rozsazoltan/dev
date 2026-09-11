@@ -127,13 +127,25 @@ impl Process for SystemProcess {
         let output = Command::new(program).args(args).output()?;
         if !output.status.success() {
             return Err(io::Error::other(format!(
-                "external command exited with {}",
-                output.status
+                "external command exited with {}: {}",
+                output.status,
+                decode_windows_output(&output.stderr).trim()
             )));
         }
-        String::from_utf8(output.stdout)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        Ok(decode_windows_output(&output.stdout))
     }
+}
+
+fn decode_windows_output(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xff, 0xfe]) || bytes.chunks_exact(2).all(|pair| pair[1] == 0) {
+        let bytes = bytes.strip_prefix(&[0xff, 0xfe]).unwrap_or(bytes);
+        let units = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>();
+        return String::from_utf16_lossy(&units);
+    }
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 struct SystemMountProbe {

@@ -82,6 +82,43 @@ fn formatting_failure_still_detaches_and_never_returns_a_disk() {
 }
 
 #[test]
+fn formatting_failure_removes_the_newly_created_disk_file() {
+    let directory = std::env::temp_dir().join(format!("wsldisk-cleanup-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("projects.vhdx");
+    std::fs::write(&path, "test-only placeholder").unwrap();
+    let plan = CreatePlan {
+        path: path.clone(),
+        capacity_bytes: 68_719_476_736,
+        dynamic: true,
+    };
+    let mut process = FakeProcess {
+        responses: VecDeque::from([
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[]}"#.into()),
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[{"name":"sdd","type":"disk"}]}"#.into()),
+            Err(io::Error::other("mkfs failed")),
+            Ok(String::new()),
+        ]),
+        calls: vec![],
+    };
+
+    assert!(
+        create_and_register(
+            &mut process,
+            "Dev",
+            "projects",
+            &plan,
+            &directory.join("disks.json")
+        )
+        .is_err()
+    );
+    assert!(!path.exists());
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn post_attach_device_detection_failure_still_detaches() {
     let plan = CreatePlan {
         path: std::env::temp_dir().join(format!(
