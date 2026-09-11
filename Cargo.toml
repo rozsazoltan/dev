@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/dev", "crates/wsldisk", "crates/wslctl", "crates/dev-config"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+clap = { version = "4.5.48", features = ["derive"] }
