@@ -225,7 +225,26 @@ fn installed_wsl_distros() -> Result<Vec<WslDistro>> {
     if !output.status.success() {
         return Err(format!("wsl.exe exited with {}", output.status).into());
     }
-    parse_wsl_list(&String::from_utf8(output.stdout)?)
+    parse_wsl_list(&decode_wsl_output(&output.stdout)?)
+}
+
+fn decode_wsl_output(output: &[u8]) -> Result<String> {
+    if is_utf16le(output) {
+        let output = output.strip_prefix(&[0xff, 0xfe]).unwrap_or(output);
+        let code_units = output
+            .chunks_exact(2)
+            .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+            .collect::<Vec<_>>();
+        return Ok(String::from_utf16(&code_units)?);
+    }
+
+    Ok(String::from_utf8(output.to_vec())?)
+}
+
+fn is_utf16le(output: &[u8]) -> bool {
+    output.starts_with(&[0xff, 0xfe])
+        || output.len() >= 2
+            && output.chunks_exact(2).filter(|bytes| bytes[1] == 0).count() * 2 >= output.len()
 }
 
 pub fn parse_wsl_list(output: &str) -> Result<Vec<WslDistro>> {
@@ -524,5 +543,31 @@ mod tests {
         assert!(!report.checks()[3].is_ok());
 
         std::fs::remove_dir_all(local_app_data).unwrap();
+    }
+
+    #[test]
+    fn decodes_utf16le_wsl_list_output_before_parsing_versions() {
+        let output = "  NAME              STATE           VERSION\r\n* Ubuntu 24.04      Running         2\r\n  Debian            Stopped         1\r\n";
+        let bytes = output
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>();
+
+        let decoded = super::decode_wsl_output(&bytes).unwrap();
+        let distros = super::parse_wsl_list(&decoded).unwrap();
+
+        assert_eq!(distros.len(), 2);
+        assert_eq!(distros[0].name, "Ubuntu 24.04");
+        assert_eq!(distros[0].version, 2);
+        assert_eq!(distros[1].name, "Debian");
+        assert_eq!(distros[1].version, 1);
+    }
+
+    #[test]
+    fn preserves_utf8_wsl_list_output() {
+        let output =
+            "  NAME              STATE           VERSION\n* Ubuntu            Running         2\n";
+
+        assert_eq!(super::decode_wsl_output(output.as_bytes()).unwrap(), output);
     }
 }
