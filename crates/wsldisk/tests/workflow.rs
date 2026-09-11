@@ -1,0 +1,158 @@
+use std::{collections::VecDeque, ffi::OsString, io, path::PathBuf};
+
+use wsldisk::{CreatePlan, Process, create_and_register, read_registry};
+
+struct FakeProcess {
+    responses: VecDeque<io::Result<String>>,
+    calls: Vec<(OsString, Vec<OsString>)>,
+}
+
+impl Process for FakeProcess {
+    fn run(&mut self, program: OsString, args: Vec<OsString>) -> io::Result<String> {
+        self.calls.push((program, args));
+        self.responses.pop_front().expect("unexpected process call")
+    }
+}
+
+#[test]
+fn create_formats_detected_disk_detaches_then_returns_registry_record() {
+    let plan = CreatePlan {
+        path: std::env::temp_dir().join(format!(
+            "wsldisk-workflow-{}\\projects.vhdx",
+            std::process::id()
+        )),
+        capacity_bytes: 68_719_476_736,
+        dynamic: true,
+    };
+    let mut process = FakeProcess {
+        responses: VecDeque::from([
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[{"name":"sda","type":"disk"}]}"#.into()),
+            Ok(String::new()),
+            Ok(
+                r#"{"blockdevices":[{"name":"sda","type":"disk"},{"name":"sdd","type":"disk"}]}"#
+                    .into(),
+            ),
+            Ok(String::new()),
+            Ok(String::new()),
+        ]),
+        calls: vec![],
+    };
+
+    let registry =
+        std::env::temp_dir().join(format!("wsldisk-workflow-{}.json", std::process::id()));
+    let disk = create_and_register(&mut process, "Dev", "projects", &plan, &registry).unwrap();
+
+    assert_eq!(disk.mount_name, "projects");
+    assert_eq!(process.calls.len(), 6);
+    assert!(
+        process.calls[4]
+            .1
+            .iter()
+            .any(|arg| arg == "/usr/sbin/mkfs.ext4")
+    );
+    assert!(process.calls[4].1.iter().any(|arg| arg == "root"));
+    assert!(process.calls[5].1.iter().any(|arg| arg == "--unmount"));
+    assert_eq!(read_registry(&registry).unwrap(), vec![disk]);
+    std::fs::remove_file(registry).unwrap();
+}
+
+#[test]
+fn formatting_failure_still_detaches_and_never_returns_a_disk() {
+    let plan = CreatePlan {
+        path: std::env::temp_dir().join(format!(
+            "wsldisk-failure-{}\\projects.vhdx",
+            std::process::id()
+        )),
+        capacity_bytes: 68_719_476_736,
+        dynamic: true,
+    };
+    let mut process = FakeProcess {
+        responses: VecDeque::from([
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[]}"#.into()),
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[{"name":"sdd","type":"disk"}]}"#.into()),
+            Err(io::Error::other("mkfs failed")),
+            Ok(String::new()),
+        ]),
+        calls: vec![],
+    };
+
+    let registry =
+        std::env::temp_dir().join(format!("wsldisk-failure-{}.json", std::process::id()));
+    assert!(create_and_register(&mut process, "Dev", "projects", &plan, &registry).is_err());
+    assert!(process.calls[5].1.iter().any(|arg| arg == "--unmount"));
+    assert!(!registry.exists());
+}
+
+#[test]
+fn formatting_failure_removes_the_newly_created_disk_file() {
+    let directory = std::env::temp_dir().join(format!("wsldisk-cleanup-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("projects.vhdx");
+    std::fs::write(&path, "test-only placeholder").unwrap();
+    let plan = CreatePlan {
+        path: path.clone(),
+        capacity_bytes: 68_719_476_736,
+        dynamic: true,
+    };
+    let mut process = FakeProcess {
+        responses: VecDeque::from([
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[]}"#.into()),
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[{"name":"sdd","type":"disk"}]}"#.into()),
+            Err(io::Error::other("mkfs failed")),
+            Ok(String::new()),
+        ]),
+        calls: vec![],
+    };
+
+    assert!(
+        create_and_register(
+            &mut process,
+            "Dev",
+            "projects",
+            &plan,
+            &directory.join("disks.json")
+        )
+        .is_err()
+    );
+    assert!(!path.exists());
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn post_attach_device_detection_failure_still_detaches() {
+    let plan = CreatePlan {
+        path: std::env::temp_dir().join(format!(
+            "wsldisk-detect-{}\\projects.vhdx",
+            std::process::id()
+        )),
+        capacity_bytes: 68_719_476_736,
+        dynamic: true,
+    };
+    let mut process = FakeProcess {
+        responses: VecDeque::from([
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[]}"#.into()),
+            Ok(String::new()),
+            Err(io::Error::other("lsblk failed")),
+            Ok(String::new()),
+        ]),
+        calls: vec![],
+    };
+
+    assert!(
+        create_and_register(
+            &mut process,
+            "Dev",
+            "projects",
+            &plan,
+            &PathBuf::from("unused")
+        )
+        .is_err()
+    );
+    assert!(process.calls[4].1.iter().any(|arg| arg == "--unmount"));
+}

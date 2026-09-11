@@ -1,14 +1,41 @@
 # Contributor and coding-agent instructions
 
-- This is a Windows-only project. Prefer native Windows and WSL primitives.
-- Use Rust 2024 and `mise` for the toolchain and project commands.
+## Project
+
+- Windows-only Rust 2024 project. Prefer native Windows and WSL primitives.
+- Use `mise` for project tooling and checks.
 - Keep ownership boundaries clear:
-  - `dev` owns configuration, diagnostics, and self-update.
-  - `wsldisk` owns VHDX lifecycle.
-  - `wslctl` owns WSL distro and backup lifecycle.
-- Use structured process arguments, never shell command strings.
-- Use TDD for behavior changes and run `mise run check` before finishing an issue.
+  - `dev`: configuration, diagnostics, and self-update.
+  - `wsldisk`: VHDX lifecycle.
+  - `wslctl`: WSL distro and backup lifecycle.
+- Use structured process arguments; never build shell command strings.
 - Do not add functionality outside the current issue scope.
+
+## Development workflow
+
+- Never work directly on `master`.
+- Before modifying files, verify that work is on a task-specific branch or worktree.
+- If the current branch is `master`, or branch safety cannot be confirmed, stop before modifying the repository.
+- Never commit, push, merge, rebase, force-push, or rewrite `master` directly unless explicitly instructed.
+
+Before implementation, create a short numbered implementation plan.
+
+Each numbered implementation step is a commit boundary:
+
+- Implement only that step.
+- Use TDD for behavior changes.
+- Run the relevant tests or checks.
+- Do not commit a known failing or incomplete state.
+- Commit the step after it is verified.
+- Use a Conventional Commit message for that step.
+- Do not start the next step until the commit succeeds.
+- Do not amend, squash, or rewrite previous commits unless explicitly instructed.
+
+After all implementation steps, run:
+
+`mise run check`
+
+If final verification requires fixes, commit those fixes separately.
 
 ## Safety
 
@@ -21,18 +48,15 @@
 
 ## CLI behavior
 
-- Keep `--json` output machine-readable.
-- When `--json` is used, stdout must contain JSON only; diagnostics belong on stderr.
+- `--json` stdout must contain valid JSON only; diagnostics belong on stderr.
 - Failed operations must return a non-zero exit code.
 
 ## Out of scope unless explicitly requested
 
-```text
-GUI
-Tauri
-MCP
-Git/worktrees
-Mutagen
-workspace orchestration
-background services
-```
+- GUI
+- Tauri
+- MCP
+- Git/worktree management as product functionality
+- Mutagen
+- workspace orchestration
+- background services
