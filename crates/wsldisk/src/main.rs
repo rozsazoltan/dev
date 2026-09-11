@@ -14,6 +14,8 @@ struct Cli {
     json: bool,
     #[arg(long, global = true)]
     dry_run: bool,
+    #[arg(long, global = true)]
+    debug: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -49,7 +51,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     match cli.command {
         Commands::List => print_value(&read_registry(&config.disk_registry_path())?, cli.json),
         Commands::Status { name, all } => {
-            let probe = SystemMountProbe;
+            let probe = SystemMountProbe { debug: cli.debug };
             let disks = read_registry(&config.disk_registry_path())?;
             print_value(
                 &status(&disks, if all { None } else { name.as_deref() }, &probe)?,
@@ -69,7 +71,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                     cli.json,
                 );
             } else {
-                let mut process = SystemProcess;
+                let mut process = SystemProcess { debug: cli.debug };
                 let disk = create_and_register(
                     &mut process,
                     distro,
@@ -105,9 +107,12 @@ fn print_value(value: &impl serde::Serialize, json: bool) {
     }
 }
 
-struct SystemProcess;
+struct SystemProcess {
+    debug: bool,
+}
 impl Process for SystemProcess {
     fn run(&mut self, program: OsString, args: Vec<OsString>) -> io::Result<String> {
+        confirm_debug(self.debug, &program, &args)?;
         let output = Command::new(program).args(args).output()?;
         if !output.status.success() {
             return Err(io::Error::other(format!(
@@ -120,12 +125,22 @@ impl Process for SystemProcess {
     }
 }
 
-struct SystemMountProbe;
+struct SystemMountProbe {
+    debug: bool,
+}
 impl MountProbe for SystemMountProbe {
     fn is_mounted(&self, disk: &Disk) -> io::Result<bool> {
         let script = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("scripts")
             .join("get-vhd-status.ps1");
+        let args = vec![
+            OsString::from("-NoProfile"),
+            OsString::from("-NonInteractive"),
+            OsString::from("-File"),
+            script.clone().into_os_string(),
+            disk.path.clone().into_os_string(),
+        ];
+        confirm_debug(self.debug, &OsString::from("powershell.exe"), &args)?;
         let output = Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-File"])
             .arg(script)
@@ -135,5 +150,23 @@ impl MountProbe for SystemMountProbe {
             return Err(io::Error::other("disk status probe failed"));
         }
         Ok(String::from_utf8_lossy(&output.stdout).trim() == "true")
+    }
+}
+
+fn confirm_debug(debug: bool, program: &OsString, args: &[OsString]) -> io::Result<()> {
+    if !debug {
+        return Ok(());
+    }
+    eprintln!("debug: {:?} {:?}", program, args);
+    eprint!("Run this command? [y/N] ");
+    let mut answer = String::new();
+    io::stdin().read_line(&mut answer)?;
+    if answer.trim().eq_ignore_ascii_case("y") {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Interrupted,
+            "command not confirmed",
+        ))
     }
 }

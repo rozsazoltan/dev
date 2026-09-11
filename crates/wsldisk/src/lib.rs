@@ -183,22 +183,26 @@ pub fn create_disk(
         .map(OsString::from)
         .collect(),
     )?;
-    let after = list(process)?;
-    let device = detect_new_disk(&before, &after)?;
-    let format_result = process.run(
-        wsl.clone(),
-        vec![
-            "--distribution",
-            distro,
-            "--exec",
-            "mkfs.ext4",
-            "-F",
-            device.to_string_lossy().as_ref(),
-        ]
-        .into_iter()
-        .map(OsString::from)
-        .collect(),
-    );
+    let workflow_result = (|| {
+        let after = list(process)?;
+        let device = detect_new_disk(&before, &after)?;
+        process.run(
+            wsl.clone(),
+            vec![
+                "--distribution",
+                distro,
+                "--user",
+                "root",
+                "--exec",
+                "mkfs.ext4",
+                "-F",
+                device.to_string_lossy().as_ref(),
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .collect(),
+        )
+    })();
     let detach_result = process.run(
         wsl,
         vec!["--unmount", plan.path.to_string_lossy().as_ref()]
@@ -206,7 +210,7 @@ pub fn create_disk(
             .map(OsString::from)
             .collect(),
     );
-    format_result?;
+    workflow_result?;
     detach_result?;
     Ok(Disk {
         path: plan.path.clone(),

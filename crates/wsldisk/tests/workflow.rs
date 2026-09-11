@@ -43,6 +43,7 @@ fn create_formats_detected_disk_detaches_then_returns_registry_record() {
     assert_eq!(disk.mount_name, "projects");
     assert_eq!(process.calls.len(), 6);
     assert!(process.calls[4].1.iter().any(|arg| arg == "mkfs.ext4"));
+    assert!(process.calls[4].1.iter().any(|arg| arg == "root"));
     assert!(process.calls[5].1.iter().any(|arg| arg == "--unmount"));
     assert_eq!(read_registry(&registry).unwrap(), vec![disk]);
     std::fs::remove_file(registry).unwrap();
@@ -72,4 +73,35 @@ fn formatting_failure_still_detaches_and_never_returns_a_disk() {
     assert!(create_and_register(&mut process, "Dev", "projects", &plan, &registry).is_err());
     assert!(process.calls[5].1.iter().any(|arg| arg == "--unmount"));
     assert!(!registry.exists());
+}
+
+#[test]
+fn post_attach_device_detection_failure_still_detaches() {
+    let plan = CreatePlan {
+        path: PathBuf::from(r"D:\Dev\disks\projects.vhdx"),
+        capacity_bytes: 68_719_476_736,
+        dynamic: true,
+    };
+    let mut process = FakeProcess {
+        responses: VecDeque::from([
+            Ok(String::new()),
+            Ok(r#"{"blockdevices":[]}"#.into()),
+            Ok(String::new()),
+            Err(io::Error::other("lsblk failed")),
+            Ok(String::new()),
+        ]),
+        calls: vec![],
+    };
+
+    assert!(
+        create_and_register(
+            &mut process,
+            "Dev",
+            "projects",
+            &plan,
+            &PathBuf::from("unused")
+        )
+        .is_err()
+    );
+    assert!(process.calls[4].1.iter().any(|arg| arg == "--unmount"));
 }
