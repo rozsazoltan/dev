@@ -122,7 +122,10 @@ pub fn create_disk(
 ) -> io::Result<Disk> {
     use std::ffi::OsString;
     let powershell = OsString::from("powershell.exe");
-    process.run(powershell, vec!["-NoProfile", "-NonInteractive", "-File", "scripts/new-dynamic-vhd.ps1", plan.path.to_string_lossy().as_ref(), &plan.capacity_bytes.to_string()]
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("scripts")
+        .join("new-dynamic-vhd.ps1");
+    process.run(powershell, vec!["-NoProfile", "-NonInteractive", "-File", script.to_string_lossy().as_ref(), plan.path.to_string_lossy().as_ref(), &plan.capacity_bytes.to_string()]
         .into_iter().map(OsString::from).collect())?;
     let wsl = OsString::from("wsl.exe");
     let list = |process: &mut dyn Process| process.run(wsl.clone(), vec!["--distribution", distro, "--exec", "lsblk", "--json"].into_iter().map(OsString::from).collect());
