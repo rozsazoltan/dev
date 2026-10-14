@@ -4,10 +4,6 @@ Personal repository: `rozsazoltan/opencode-for-me`. A version-controlled, **low-
 
 This repository is a **personal configuration template assembled from the supplied settings**, not an upstream OpenCode distribution. It contains no credentials or machine-specific secret files. It does not automatically install packages or change the machine when cloned.
 
-## Repository
-
-Planned GitHub location: `https://github.com/rozsazoltan/opencode-for-me` (link becomes usable once published). The repository folder is `opencode-for-me`; OpenCode application configuration folders such as `~/.config/opencode/` keep their original names.
-
 ## Start here
 
 1. Read [Architecture](docs/architecture.md), [Install on Windows](docs/setup-windows.md) or [Install on WSL](docs/setup-wsl.md).
