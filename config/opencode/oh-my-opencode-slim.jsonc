@@ -1,0 +1,47 @@
+{
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@2/oh-my-opencode-slim.schema.json",
+  "agents": {
+    "designer": { "mcps": [], "skills": [] },
+    "explorer": { "mcps": [], "skills": [] },
+    "fixer": { "mcps": [], "skills": [] },
+    "librarian": { "mcps": ["context7", "gh_grep", "github"], "skills": [] },
+    "oracle": { "mcps": [], "skills": ["simplify"] },
+    "orchestrator": {
+      // Restrict MCP catalog here; ask Librarian for external research.
+      "mcps": [],
+      "skills": ["*", "!deepwork"],
+      "skills_add": ["planning-with-files"]
+    }
+  },
+  "disabled_agents": [],
+  "disabled_mcps": [],
+  // Preserve explicit `/deepwork` while preventing auto skill activation.
+  "disabled_skills": ["deepwork"],
+  "disabled_commands": [],
+  "fallback": { "enabled": false },
+  "backgroundJobs": {
+    "orchestratorWake": { "enabled": false },
+    "boardInjection": false,
+    "concurrency": { "defaultConcurrency": 1 }
+  },
+  "preset": "codex",
+  "presets": {
+    "codex": {
+      "designer": { "model": "openai/gpt-6-luna", "variant": "high" },
+      "explorer": { "model": "openai/gpt-6-luna", "variant": "medium" },
+      "fixer": { "model": "openai/gpt-6-luna", "variant": "high" },
+      "librarian": { "model": "openai/gpt-6-luna", "variant": "medium" },
+      "oracle": { "model": "openai/gpt-6.1-sol", "variant": "medium" },
+      "orchestrator": { "model": "openai/gpt-6.1-sol", "variant": "low" }
+    },
+    "session": {
+      "designer": { "inheritModelFrom": "session" },
+      "explorer": { "inheritModelFrom": "session" },
+      "fixer": { "inheritModelFrom": "session" },
+      "librarian": { "inheritModelFrom": "session" },
+      "oracle": { "inheritModelFrom": "session" },
+      "orchestrator": { "inheritModelFrom": "session" }
+    }
+  },
+  "stripOrchestratorModel": false
+}

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Browser MCP not auto-enabled: use Playwright CLI/skill first where feasible.
+  "watcher": { "ignore": ["node_modules/**", "dist/**", "coverage/**"] }
+}

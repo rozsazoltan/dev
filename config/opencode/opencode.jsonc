@@ -1,0 +1,59 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Source: user-supplied OpenCode V2 setup; overrides favor explicit approval.
+  // Existing Windows Desktop UI settings such as `windowsHide` are intentionally
+  // NOT assumed to be valid core V2 config fields.
+  "plugins": [
+    "opencode-planning-with-files@1",
+    "oh-my-opencode-slim@2",
+    "@tarquinen/opencode-dcp@latest",
+    "opencode-snip@3.0.0-next.1"
+  ],
+  "mcp": {
+    "servers": {
+      "github": {
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "oauth": false,
+        "disabled": false,
+        "headers": {
+          "Authorization": "Bearer {env:OPENCODE_GITHUB_TOKEN}"
+        }
+      }
+    }
+  },
+  "agents": {
+    "general": { "disabled": true },
+    "explore": { "disabled": true },
+    "orchestrator": {
+      "permissions": [
+        { "action": "subagent", "resource": "*", "effect": "ask" }
+      ]
+    },
+    "command": {
+      "description": "Executes explicitly requested slash-command tasks only",
+      "mode": "primary",
+      "system": "{file:./prompts/command.md}",
+      "permissions": [
+        { "action": "edit", "resource": "*", "effect": "allow" },
+        { "action": "shell", "resource": "*", "effect": "ask" },
+        { "action": "subagent", "resource": "*", "effect": "deny" }
+      ]
+    }
+  },
+  "permissions": [
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": "git status *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git push *", "effect": "ask" }
+  ],
+  "policies": [
+    { "action": "provider.use", "resource": "ollama", "effect": "deny" }
+  ],
+  "compaction": {
+    "auto": true,
+    "keep": { "tokens": 20000 },
+    "buffer": 8192
+  }
+}

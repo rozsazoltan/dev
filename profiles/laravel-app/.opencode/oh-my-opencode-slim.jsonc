@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@2/oh-my-opencode-slim.schema.json",
+  "agents": {
+    "librarian": {
+      "mcps": ["context7", "gh_grep", "github", "laravel-boost"]
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Optional merge into global config after setting UNSLOTH_BASE_URL and UNSLOTH_API_KEY.
+  "providers": {
+    "unsloth": {
+      "name": "Unsloth Local",
+      "package": "aisdk:@ai-sdk/openai-compatible",
+      "settings": {
+        "apiKey": "{env:UNSLOTH_API_KEY}",
+        "baseURL": "{env:UNSLOTH_BASE_URL}",
+        "includeUsage": true,
+        "setCacheKey": true
+      },
+      "models": {
+        "pi-tune": {
+          "modelID": "bytkim/Qwen3.6-27B-MTP-pi-tune-GGUF",
+          "name": "Qwen3.6 27B Pi Tune Q4_K_M",
+          "family": "qwen3_6",
+          "limit": { "context": 131072, "output": 65536 },
+          "capabilities": { "tools": true, "input": ["text"], "output": ["text"] },
+          "body": {
+            "chat_template_kwargs": { "enable_thinking": false, "preserve_thinking": false },
+            "temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0,
+            "presence_penalty": 1.5, "auto_heal_tool_calls": true,
+            "nudge_tool_calls": true, "parallel_tool_calls": false
+          }
+        },
+        "pi-reasoning": {
+          "modelID": "bytkim/Qwen3.6-27B-MTP-pi-reasoning-GGUF",
+          "name": "Qwen3.6 27B Pi Reasoning Q4_K_M",
+          "family": "qwen3_6",
+          "limit": { "context": 131072, "output": 65536 },
+          "capabilities": { "tools": true, "input": ["text"], "output": ["text"] },
+          "compatibility": { "reasoningField": "reasoning_content" },
+          "body": {
+            "chat_template_kwargs": { "enable_thinking": true, "preserve_thinking": true },
+            "temperature": 1.0, "top_p": 0.95, "top_k": 0, "min_p": 0,
+            "presence_penalty": 0, "auto_heal_tool_calls": true,
+            "nudge_tool_calls": true, "parallel_tool_calls": false
+          }
+        }
+      }
+    }
+  }
+}

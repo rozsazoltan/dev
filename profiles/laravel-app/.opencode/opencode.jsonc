@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Start OpenCode from this Laravel app's directory so `cwd: "."` is correct.
+  "mcp": {
+    "servers": {
+      "laravel-boost": {
+        "type": "local",
+        "command": ["php", "artisan", "boost:mcp"],
+        "cwd": "."
+      }
+    }
+  }
+}

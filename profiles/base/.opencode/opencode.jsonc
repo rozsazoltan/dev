@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Apply to a trusted repository root; merge with global settings.
+  "watcher": { "ignore": ["**/node_modules/**", "**/vendor/**", "**/target/**", "**/dist/**", "**/build/**"] }
+}

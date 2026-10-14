@@ -1,0 +1,9 @@
+name: opencode-global-toolkit
+version: 1.0.0
+description: Optional third-party skills installed globally for OpenCode V2
+targets:
+  - opencode
+# Conservative by default: install selected third-party skills intentionally.
+# See docs/apm.md for curated candidates and pinned dependency workflows.
+dependencies:
+  apm: []
