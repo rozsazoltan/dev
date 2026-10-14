@@ -40,12 +40,8 @@ Run similar small, medium and large tasks from comparable Git starting points. K
 
 Record `input`, `output`, `reasoning`, `cache read/write`, `subagent count`, `tool retries`, wall time, measured cost and acceptance criteria. Parallel child usage belongs to the same task budget. Two agents each saving 20% can still use more tokens than one competent agent.
 
-Fill `benchmarks/measurements.csv` after each benchmark; the supplied CSV is a blank template. Savings formula: `(baseline_total - optimized_total) / baseline_total`. Do not combine Snip and DCP savings percentages directly: they may reduce overlapping token sources.
+Record results in a personal spreadsheet or task note; this repository does not ship benchmark data or measurement scripts. Savings formula: `(baseline_total - optimized_total) / baseline_total`. Do not combine Snip and DCP savings percentages directly: they may reduce overlapping token sources.
 
-## Example analysis
+## Manual analysis
 
-```bash
-python scripts/compare_tokens.py benchmarks/measurements.csv
-```
-
-This summarizes numerical `total_tokens` across rows grouped by `scenario` and task. It intentionally does **not** query a private Desktop database or invent a session API schema.
+For each comparable run, record date, task, model, configuration, parent/child tokens, cache usage, wall time, cost, retries, and validation outcome in a spreadsheet or your own notes. This repository intentionally supplies no scripts or benchmark fixtures.

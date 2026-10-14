@@ -1,20 +1,21 @@
 # Runtime verification checklist
 
-1. Run `python scripts/validate.py`: syntax/static layout, not a runtime guarantee.
-2. Use `opencode --version`, `opencode debug config` (if supported) to inspect the real merged config.
-3. Check active plugin list using `opencode plugin --help` / `opencode plugin list` where available.
-4. Test a harmless shell command in the main Orchestrator: `git status --short`.
-5. Ask a discussion-only question. It should answer without PWF initialization or subagents.
-6. Ask a small explicitly scoped code edit and inspect whether it requests approval before delegation.
-7. Explicitly try `/deepwork` and verify the command still works even if its skill is not advertised.
-8. Ask for `pwf_status` after installing **both** PWF plugin and skill.
-9. Check `snip --version`, `snip gain --json` **in the server's actual environment**.
-10. Launch two separate Laravel application workspaces and verify each Boost process points to the correct `artisan` directory.
+This repository deliberately ships **no validation script**. Validate the live runtime using its own CLI and a few bounded checks.
+
+1. Confirm `opencode --version` and inspect the merged configuration with `opencode debug config` where supported.
+2. Inspect available plugin commands with `opencode plugin --help`, then the loaded plugins if your version supports listing them.
+3. Run a harmless read-only shell command (`git status --short`) in an Orchestrator session.
+4. Ask a discussion-only question: it should answer without plans or subagents.
+5. Request a small scoped coding change: delegation should require user approval when supported by the integration.
+6. Try `/deepwork` explicitly; a command being available does not prove its skill is automatically invokable.
+7. Verify `pwf_status` after the planning plugin **and** skill are installed.
+8. If Snip is installed, run `snip --version` and `snip gain --json` in the server's real environment.
+9. For each Laravel app, verify its OpenCode session starts in the correct app directory and Boost can resolve the right `artisan` executable.
 
 ## Common mismatch symptoms
 
-- `execute: code Missing key`: model selected JavaScript Code Mode but supplied `shell`-style arguments; not a Git syntax failure.
-- Only 2-3 skills shown in UI: may be list filtering, bundled skills loaded in-process, or plugin failure. A slash command is not proof that its corresponding skill is loaded.
-- `snip: command not found`: plugin cannot invoke the CLI from the service PATH; fix OS-specific install/PATH first.
-- Subagent named `General`: check actual agent ID; disable built-in general in V2 and test specialized Slim routing, but UI label alone can be ambiguous.
-- MCP not running at app folder: inspect OpenCode's session cwd, not just the currently opened file path.
+- `execute: code Missing key`: Code Mode received `shell`-shaped arguments; not a Git syntax failure.
+- Only 2–3 skills shown in UI: may indicate UI filtering, in-process Slim bundled registrations, or a plugin problem. A slash command alone is not conclusive.
+- `snip: command not found`: the service cannot resolve the CLI; fix that environment's install/PATH.
+- `General` subagents: inspect the actual agent ID, not only its visible title.
+- Wrong Laravel MCP working directory: inspect the session workspace, not merely the open file.

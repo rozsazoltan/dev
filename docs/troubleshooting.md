@@ -19,7 +19,7 @@ OpenCode and Slim may snapshot prompt/skill config at session or plugin startup;
 
 ## Windows PowerShell profile function
 
-A PS function named `opencode` only exists in PowerShell processes that loaded the profile. OpenCode Desktop subprocesses do not automatically inherit PowerShell functions. The supplied `scripts/powershell/opencode-desktop.ps1` finds the newest semver CLI on each invocation. Verify `Get-Command opencode -All`. See [setup](setup-windows.md).
+A PS function named `opencode` only exists in PowerShell processes that loaded the profile. OpenCode Desktop subprocesses do not automatically inherit PowerShell functions. The [documented PowerShell snippet](../scripts/powershell/opencode-desktop.ps1) finds the newest semver CLI on each invocation. Dot-source it from `$PROFILE` as shown in the [README](../README.md#windows-powershell-stable-opencode-command-optional). Verify `Get-Command opencode -All`. See [setup](setup-windows.md).
 
 ## Starship timeout in `System32`
 

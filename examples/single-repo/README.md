@@ -1,13 +1,12 @@
 # Example single repository
 
-For a standalone Laravel app:
+Choose a matching template under [`profiles/`](../../profiles/) and manually copy or merge its `AGENTS.md` and `.opencode/` directory into the project root. No installer is required.
+
+For a standalone Laravel app, apply `profiles/laravel-app`, then from the **app root** run:
 
 ```bash
-python scripts/apply-profile.py laravel-app /path/to/my-laravel-project
-python scripts/apply-profile.py laravel-app /path/to/my-laravel-project --apply
-cd /path/to/my-laravel-project
 composer require laravel/boost --dev
 php artisan boost:install
 ```
 
-Use `vue-app`, `tauri-app` or `library` in place of `laravel-app` for other project types. This installer does **not** copy secrets, run Composer, or start an OpenCode service for you.
+Start OpenCode from the app directory. Use `vue-app`, `tauri-app`, or `library` for other repository types. Read the [main README](../../README.md#project-profiles) and [single-repo guide](../../docs/single-repo.md).

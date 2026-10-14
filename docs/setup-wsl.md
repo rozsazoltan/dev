@@ -1,28 +1,30 @@
 # WSL setup
 
-WSL is a different user environment from Windows Desktop. A Linux `snip` binary or WSL `mise` installation **does not guarantee** that a Windows Desktop plugin can execute `snip`.
+Use [README Get started](../README.md#get-started) for manual setup. There are **no installation or validation scripts** in this repository.
 
-```bash
-# Repository root:
-bash scripts/install-wsl.sh               # preview
-bash scripts/install-wsl.sh --apply       # copy only missing files
-bash scripts/install-wsl.sh --apply --replace  # backup + replace existing
+From the `opencode-for-me` checkout, back up `~/.config/opencode/` and copy the contents of `config/opencode/` as shown in the README. If you maintain dotfile symlinks, link individual files to their resolved paths and verify their targets before replacing existing files.
 
-python3 scripts/validate.py
-```
+## Separate toolchains
 
-If symlinking your dotfiles, use resolved absolute paths, e.g. `ln -s /path/to/opencode-for-me/config/opencode/AGENTS.md ~/.config/opencode/AGENTS.md`; ensure the parent directory exists and the destination isn't a real file. Scripts intentionally **copy** rather than creating symlinks to minimize surprises.
-
-Install Snip into Linux separately if actually running OpenCode's backend in WSL:
+WSL and Windows Desktop do not share runtime PATH or automatically use the same `snip` installation. If OpenCode actually runs in WSL and you use mise:
 
 ```bash
 mise use -g github:edouard-claude/snip@latest
 mise exec -- snip --version
-mise upgrade github:edouard-claude/snip
 ```
 
-Ensure the WSL OpenCode **service** environment includes `mise` shims or initializes mise, especially for non-interactive tool invocations. Confirm `command -v snip` from the same process context.
+Ensure non-interactive OpenCode service processes can resolve the `snip` executable. When appropriate, use mise shims or activate mise in the same shell invocation.
 
-**Symlink hot reload:** a symlink target changing does not guarantee OpenCode's file watcher sees it. Use `opencode reload` if supported by your installed build; otherwise restart the relevant OpenCode service/session after backing up work. Do not assume a rule file was reloaded merely because `cat` shows its updated content.
+## Symlinks and reloads
 
-**Misleading port collision:** if Windows Desktop already listens on 127.0.0.1:49374, a second WSL service may report "managed service port in use". Inspect with `ss -ltnp` in WSL and `Get-NetTCPConnection` on Windows; prefer connecting to the correct existing backend, not killing unknown processes.
+Edits to symlink targets may not trigger OpenCode's file watcher. Run `opencode reload` only if supported by the installed version; otherwise restart the relevant service/session after pending work completes. Reading a symlink's latest content with `cat` does not prove the agent loaded it.
+
+## Shared localhost port
+
+Windows Desktop and WSL may both attempt to bind or contact a managed OpenCode service. Check the actual owner before modifying a port or terminating a process:
+
+```bash
+ss -ltnp
+```
+
+For Windows-side process inspection, see [troubleshooting](troubleshooting.md). Use the CLI appropriate to the service you actually intend to reach.
