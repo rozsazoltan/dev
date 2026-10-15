@@ -6,7 +6,7 @@ Personal [OpenCode](https://opencode.ai/) configuration and curated [APM](https:
 
 | Path | Purpose |
 | --- | --- |
-| `config/` | OpenCode settings, agent instructions, plugin config, prompts, WSL template |
+| `config/` | OpenCode settings, agent instructions, plugin config, prompts, Windows/WSL configs |
 | `apm.yml` | Curated third-party skill dependencies |
 | `skillsets.yml` | Technology → skill mapping (**reference only**, not an OpenCode feature) |
 | `.apm/` | Versioned **snapshots** of user-level APM settings and marketplaces |
@@ -23,11 +23,28 @@ Install the reviewed files from `config/` into your OpenCode user configuration 
 $target = Join-Path $HOME '.config/opencode'
 # Back up the existing target before overwriting any files.
 New-Item -ItemType Directory -Force -Path $target | Out-Null
-Copy-Item ./config/opencode.jsonc, ./config/AGENTS.md, ./config/dcp.jsonc, ./config/oh-my-opencode-slim.jsonc -Destination $target -Force
+Copy-Item ./config/opencode.jsonc, ./config/opencode-wsl.jsonc, ./config/AGENTS.md, ./config/dcp.jsonc, ./config/oh-my-opencode-slim.jsonc -Destination $target -Force
 Copy-Item ./config/prompts, ./config/oh-my-opencode-slim -Destination $target -Recurse -Force
 ```
 
-`config/wsl.jsonc` is a separate WSL starting point; adjust its Windows mount path for your machine. Keep credentials in a local `.secrets/` folder, never in Git. The OpenCode configuration is preserved as supplied; check version-specific keys against your installed OpenCode before applying it.
+The `opencode.jsonc` file is for Windows; `opencode-wsl.jsonc` is for WSL. Both live in the **Windows** OpenCode configuration directory. In **WSL Bash**, link the WSL config to the Windows file using OpenCode's expected filename:
+
+```bash
+# Requires WSL interop (cmd.exe) and the Windows setup above.
+win_home="$(wslpath -u "$(cmd.exe /C 'echo %USERPROFILE%' | tr -d '\r')")"
+win_config="$win_home/.config/opencode/opencode-wsl.jsonc"
+if [ -f "$win_config" ]; then
+  mkdir -p "$HOME/.config/opencode"
+  ln -s "$win_config" "$HOME/.config/opencode/opencode.jsonc"
+  readlink -f "$HOME/.config/opencode/opencode.jsonc"
+else
+  printf 'Missing Windows config: %s\n' "$win_config" >&2
+fi
+```
+
+This creates `~/.config/opencode/opencode.jsonc` (WSL symlink) → `/mnt/c/Users/<WindowsUser>/.config/opencode/opencode-wsl.jsonc` (Windows file). `ln -s` intentionally **does not overwrite** an existing WSL config; back it up before creating the link. Adjust the Windows skills path inside `config/opencode-wsl.jsonc` if your username or location differs.
+
+Keep credentials in a local `.secrets/` folder, never in Git. The OpenCode configuration is preserved as supplied; check version-specific keys against your installed OpenCode before applying it.
 
 To expose the latest OpenCode Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`](scripts/opencode-desktop.ps1) in your `$PROFILE`:
 
@@ -58,6 +75,63 @@ apm install -g --target opencode --frozen
 ```
 
 The GitHub workflow updates the repository only; it does not update local or global OpenCode installations. `.agents/skills/` and other generated skill output are intentionally not versioned here. Third-party skill sources retain their licenses.
+
+## Extra CLI tools
+
+Install release binaries with [bin](https://github.com/marcosnils/bin) (run on the OS where you need the tool):
+
+```sh
+bin install https://github.com/jesseduffield/lazygit
+bin install https://github.com/jesseduffield/lazydocker
+bin install https://github.com/craigloewen-msft/lazywslc
+bin install https://github.com/dandavison/delta
+bin install https://github.com/dorssel/usbipd-win
+bin install https://github.com/edouard-claude/snip
+bin install https://github.com/mutagen-io/mutagen
+
+# Update bin-managed executables
+bin update
+```
+
+`lazywslc` and `usbipd-win` are Windows-oriented. `bin install` retrieves the release executable; for `usbipd-win`, installing the system service/driver (if needed) is a separate step covered by the [upstream installer](https://github.com/dorssel/usbipd-win#how-to-install).
+
+**snip:** Install it on the same machine as [@rozsazoltan/opencode-shell](https://github.com/rozsazoltan/opencode-shell) to enable the plugin's shell-output filtering. The plugin can also run without snip (mise environment handling is independent), but snip-based wrapping will be unavailable. Make sure `snip` is on the OpenCode server's `PATH` (or in `~/bin`).
+
+## mise (jdx/mise)
+
+**Windows (standalone executable):** Download the latest matching Windows `.exe` from [jdx/mise releases](https://github.com/jdx/mise/releases/latest) (`windows-x64` for x64; `windows-arm64` for ARM64). Copy it to `D:\program\bin\mise.exe` (rename the downloaded executable to `mise.exe`). Ensure `D:\program\bin` is on `PATH`.
+
+```powershell
+New-Item -ItemType Directory -Force 'D:\program\bin' | Out-Null
+# From the download folder; keep only the desired architecture's release file.
+Copy-Item '.\mise-v*-windows-x64.exe' 'D:\program\bin\mise.exe'
+mise --version
+mise self-update
+```
+
+When installed from a standalone GitHub release binary, update mise itself with `mise self-update` (not `mise upgrade`, which upgrades tools managed *by* mise).
+
+**Fedora / supported RHEL (DNF):** Enable the mise COPR repository, install, and later upgrade using DNF:
+
+```bash
+sudo dnf copr enable jdxcode/mise
+sudo dnf install -y mise
+sudo dnf upgrade --refresh mise
+```
+
+**Debian / Ubuntu (APT):** Enable the mise package repository using `extrepo`, then install and update using APT:
+
+```bash
+sudo apt install -y extrepo
+sudo extrepo enable mise
+sudo apt update
+sudo apt install -y mise
+# Later:
+sudo apt update
+sudo apt install --only-upgrade -y mise
+```
+
+For package-manager installations, **update via DNF/APT**, not `mise self-update`. Check with `mise --version` and `mise doctor`. See the [official mise installation guide](https://mise.jdx.dev/installing-mise.html) for distro/version-specific requirements.
 
 ## License
 
