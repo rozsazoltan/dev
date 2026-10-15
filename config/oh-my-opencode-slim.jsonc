@@ -1,0 +1,95 @@
+{
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
+  "__docs01": "https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/openai-preset.md#bundled-model-mapping",
+  "__docs02": "https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/docs/preset-switching.md",
+  "agents": {
+    "designer": {
+      "mcps": [],
+      "skills": []
+    },
+    "explorer": {
+      "mcps": [],
+      "skills": []
+    },
+    "fixer": {
+      "mcps": [],
+      "skills": []
+    },
+    "librarian": {
+      "mcps": ["context7", "gh_grep", "github"],
+      "skills": []
+    },
+    "oracle": {
+      "mcps": [],
+      "skills": [
+        "simplify"
+      ]
+    },
+    "orchestrator": {
+      "mcps": [
+        "*",
+        "!context7"
+      ],
+      "skills": [
+        "*"
+      ],
+      "skills_add": ["planning-with-files"]
+    }
+  },
+  "disabled_agents": [],
+  "disabled_mcps": [],
+  "disabled_skills": [],
+  "fallback": {
+    "enabled": false
+  },
+  "preset": "codex",
+  "presets": {
+    "codex": {
+      "designer": {
+        "model": "openai/gpt-6-luna",
+        "variant": "medium"
+      },
+      "explorer": {
+        "model": "openai/gpt-6-luna",
+        "variant": "low"
+      },
+      "fixer": {
+        "model": "openai/gpt-6-luna",
+        "variant": "high"
+      },
+      "librarian": {
+        "model": "openai/gpt-6-luna",
+        "variant": "low"
+      },
+      "oracle": {
+        "model": "openai/gpt-6.1-sol",
+        "variant": "medium"
+      },
+      "orchestrator": {
+        "model": "openai/gpt-6.1-sol",
+        "variant": "low"
+      }
+    },
+    "session": {
+      "designer": {
+        "inheritModelFrom": "session"
+      },
+      "explorer": {
+        "inheritModelFrom": "session"
+      },
+      "fixer": {
+        "inheritModelFrom": "session"
+      },
+      "librarian": {
+        "inheritModelFrom": "session"
+      },
+      "oracle": {
+        "inheritModelFrom": "session"
+      },
+      "orchestrator": {
+        "inheritModelFrom": "session"
+      }
+    }
+  },
+  "stripOrchestratorModel": false
+}

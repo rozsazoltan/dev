@@ -20,7 +20,7 @@
 
     Add the following line to your profile, replacing the path with the
     location of your own clone:
-      . "C:\path\to\opencode-for-me\scripts\powershell\opencode-desktop.ps1"
+      . "C:\path\to\opencode-for-me\scripts\opencode-desktop.ps1"
 
     Reload it using:
       . $PROFILE

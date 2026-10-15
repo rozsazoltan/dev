@@ -7,7 +7,6 @@
 *.key
 *.p12
 *.pfx
-**/apm.lock.yaml
 **/apm_modules/
 .planning/
 .slim/
@@ -18,3 +17,9 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# Keep this repository limited to configurations and skill dependency metadata
+/.agents/skills/
+/.opencode/skills/
+/.claude/skills/
+/skills/

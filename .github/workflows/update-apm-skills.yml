@@ -1,0 +1,43 @@
+name: Update APM Skills
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-apm-skills
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Refresh dependencies and open a PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update APM skills
+        uses: microsoft/apm-action@v1
+        with:
+          update: 'true'
+          audit-report: 'true'
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/update-apm-skills
+          delete-branch: true
+          commit-message: 'chore(skills): update APM dependencies'
+          title: 'chore(skills): update APM dependencies'
+          body: |
+            ## Summary
+            Update APM skill dependencies from their upstream repositories.
+
+            ## Review checklist
+            - [ ] Review upstream changes for the updated skill revisions.
+            - [ ] Review `apm.yml` and `apm.lock.yaml`.
+            - [ ] Confirm no unexpected tools, secrets, or new permissions were added.
+            - [ ] Merge only when acceptable; global installations update separately.
