@@ -1,4 +1,4 @@
-name: opencode-for-me-oxc-migration
+name: dev-oxc-migration
 version: 1.0.0
 description: Migrate linting and formatting to Oxc.
 author: rozsazoltan
