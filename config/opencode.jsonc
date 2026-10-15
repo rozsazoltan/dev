@@ -1,0 +1,158 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "windowsHide": true,
+
+  "not-used-plugins": [
+    "superpowers@git+NOPEhttps://github.com/obra/superpowers.git"
+  ],
+
+  "plugins": [
+    "@rozsazoltan/opencode-shell",
+    "opencode-planning-with-files@1",
+    "oh-my-opencode-slim@2",
+    "@tarquinen/opencode-dcp@3",
+  ],
+
+  "mcp": {
+    "servers": {
+      "github": {
+        "disabled": false,
+        "headers": {
+          "Authorization": "Bearer {file:./.secrets/github-key}"
+        },
+        "oauth": false,
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/"
+      }
+    }
+  },
+
+  "agent": {
+    "command": {
+      "description": "Executes explicit slash-command tasks only",
+      "mode": "primary",
+      "prompt": "{file:./prompts/command.md}",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow",
+        "task": "deny"
+      }
+    }
+  },
+
+  "experimental": {
+    "policies": [
+      {
+        "effect": "deny",
+        "action": "provider.use",
+        "resource": "ollama"
+      }
+    ]
+  },
+
+  "providers": {
+    "unsloth": {
+      "name": "Unsloth Local",
+
+      "package": "aisdk:@ai-sdk/openai-compatible",
+
+      "settings": {
+        "apiKey": "{file:./.secrets/unsloth-key}",
+        "baseURL": "http://192.168.1.202:8888/v1",
+        "includeUsage": true,
+        "setCacheKey": true
+      },
+
+      "models": {
+        "pi-tune": {
+          "modelID": "bytkim/Qwen3.6-27B-MTP-pi-tune-GGUF",
+          "name": "Qwen3.6 27B Pi Tune Q4_K_M",
+          "family": "qwen3_6",
+
+          "limit": {
+            "context": 131072,
+            "output": 65536
+          },
+
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+
+          "body": {
+            "chat_template_kwargs": {
+              "enable_thinking": false,
+              "preserve_thinking": false
+            },
+
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20,
+            "min_p": 0,
+            "presence_penalty": 1.5,
+
+            "auto_heal_tool_calls": true,
+            "nudge_tool_calls": true,
+            "parallel_tool_calls": false
+          }
+        },
+
+        "pi-reasoning": {
+          "modelID": "bytkim/Qwen3.6-27B-MTP-pi-reasoning-GGUF",
+          "name": "Qwen3.6 27B Pi Reasoning Q4_K_M",
+          "family": "qwen3_6",
+
+          "limit": {
+            "context": 131072,
+            "output": 65536
+          },
+
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+
+          "compatibility": {
+            "reasoningField": "reasoning_content"
+          },
+
+          "body": {
+            "chat_template_kwargs": {
+              "enable_thinking": true,
+              "preserve_thinking": true
+            },
+
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 0,
+            "min_p": 0,
+            "presence_penalty": 0,
+
+            "auto_heal_tool_calls": true,
+            "nudge_tool_calls": true,
+            "parallel_tool_calls": false
+          }
+        }
+      }
+    }
+  },
+
+  "compaction": {
+    "auto": true,
+    "keep": {
+      "tokens": 20000
+    },
+    "buffer": 8192
+  },
+}

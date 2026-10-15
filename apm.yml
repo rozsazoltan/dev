@@ -1,0 +1,41 @@
+name: opencode-for-me
+version: 1.0.0
+description: Curated OpenCode skill dependencies for my global setup.
+author: rozsazoltan
+
+targets:
+  - opencode
+
+# Custom skills will be added from rozsazoltan/skills when published.
+includes: auto
+
+dependencies:
+  apm:
+    # Previously installed global skills: keep these.
+    - mattpocock/skills/skills/productivity/writing-for-agents
+    - OthmanAdi/planning-with-files/skills/planning-with-files
+    - nutlope/hallmark/skills/hallmark
+
+    # JavaScript / TypeScript / Vue / Vite / Vitest / pnpm
+    - antfu/skills/skills/antfu
+    - antfu/skills/skills/vue
+    - antfu/skills/skills/vite
+    - antfu/skills/skills/vitest
+    - antfu/skills/skills/pnpm
+    - vuejs-ai/skills/skills/vue-best-practices
+
+    # Rust
+    - apollographql/skills/skills/rust-best-practices
+
+    # PHP / Pest
+    - spatie/freek.dev/.claude/skills/pest-testing
+
+    # Oxlint / Oxfmt migrations
+    - oxc-project/oxc/.agents/skills/migrate-oxlint
+    - oxc-project/oxc/.agents/skills/migrate-oxfmt
+
+    # Future custom skills: enable when this repository exists.
+    # - rozsazoltan/skills
+  mcp: []
+
+scripts: {}

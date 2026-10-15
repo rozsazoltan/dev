@@ -1,0 +1,25 @@
+# Do not commit credentials or personal state
+**/.secrets/
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+**/apm_modules/
+.planning/
+.slim/
+**/.opencode/logs/
+**/.opencode/cache/
+**/.snip/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# Keep this repository limited to configurations and skill dependency metadata
+/.agents/skills/
+/.opencode/skills/
+/.claude/skills/
+/skills/
