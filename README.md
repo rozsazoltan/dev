@@ -1,4 +1,4 @@
-# opencode-for-me
+# dev
 
 Personal [OpenCode](https://opencode.ai/) configuration and curated [APM](https://github.com/microsoft/apm) dependencies. Windows Desktop + WSL; manually maintained and reviewed in Git.
 
@@ -49,7 +49,7 @@ Keep credentials in a local `.secrets/` folder, never in Git. The OpenCode confi
 To expose the latest OpenCode Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`](scripts/opencode-desktop.ps1) in your `$PROFILE`:
 
 ```powershell
-. 'C:\path\to\opencode-for-me\scripts\opencode-desktop.ps1'
+. 'C:\path\to\dev\scripts\opencode-desktop.ps1'
 ```
 
 ## APM skills
@@ -80,19 +80,19 @@ From **your project's root directory** (not this repository), add only the skill
 
 ```bash
 # Vue 3 / TypeScript / Vite / Vitest / pnpm
-apm install rozsazoltan/opencode-for-me/presets/vue --target opencode
+apm install rozsazoltan/dev/presets/vue --target opencode
 
 # Laravel / Pest
-apm install rozsazoltan/opencode-for-me/presets/laravel --target opencode
+apm install rozsazoltan/dev/presets/laravel --target opencode
 
 # Rust / Cargo
-apm install rozsazoltan/opencode-for-me/presets/rust --target opencode
+apm install rozsazoltan/dev/presets/rust --target opencode
 
 # Tauri (currently Rust guidance)
-apm install rozsazoltan/opencode-for-me/presets/tauri --target opencode
+apm install rozsazoltan/dev/presets/tauri --target opencode
 
 # Compose presets when needed
-apm install rozsazoltan/opencode-for-me/presets/general rozsazoltan/opencode-for-me/presets/vue --target opencode
+apm install rozsazoltan/dev/presets/general rozsazoltan/dev/presets/vue --target opencode
 ```
 
 Available presets:
