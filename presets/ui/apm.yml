@@ -1,0 +1,10 @@
+name: opencode-for-me-ui
+version: 1.0.0
+description: UI and visual design.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - nutlope/hallmark/skills/hallmark
+  mcp: []

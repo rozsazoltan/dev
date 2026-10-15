@@ -1,0 +1,10 @@
+name: opencode-for-me-php
+version: 1.0.0
+description: PHP testing with Pest.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - spatie/freek.dev/.claude/skills/pest-testing
+  mcp: []

@@ -1,0 +1,11 @@
+name: opencode-for-me-general
+version: 1.0.0
+description: General writing and planning skills.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - mattpocock/skills/skills/productivity/writing-for-agents
+  - OthmanAdi/planning-with-files/skills/planning-with-files
+  mcp: []

@@ -1,0 +1,11 @@
+name: opencode-for-me-oxc-migration
+version: 1.0.0
+description: Migrate linting and formatting to Oxc.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - oxc-project/oxc/.agents/skills/migrate-oxlint
+  - oxc-project/oxc/.agents/skills/migrate-oxfmt
+  mcp: []

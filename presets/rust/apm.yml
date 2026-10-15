@@ -1,0 +1,10 @@
+name: opencode-for-me-rust
+version: 1.0.0
+description: Rust development best practices.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - apollographql/skills/skills/rust-best-practices
+  mcp: []

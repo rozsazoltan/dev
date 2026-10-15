@@ -1,0 +1,13 @@
+name: opencode-for-me-javascript
+version: 1.0.0
+description: JavaScript and TypeScript tooling.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - antfu/skills/skills/antfu
+  - antfu/skills/skills/vite
+  - antfu/skills/skills/vitest
+  - antfu/skills/skills/pnpm
+  mcp: []

@@ -25,6 +25,18 @@ jobs:
           update: 'true'
           audit-report: 'true'
 
+      - name: Update preset dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for manifest in presets/*/apm.yml; do
+            [ -f "$manifest" ] || continue
+            (
+              cd "$(dirname "$manifest")"
+              apm update --yes
+            )
+          done
+
       - name: Open pull request
         uses: peter-evans/create-pull-request@v6
         with:

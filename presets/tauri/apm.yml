@@ -1,0 +1,10 @@
+name: opencode-for-me-tauri
+version: 1.0.0
+description: Rust foundations for Tauri projects.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - apollographql/skills/skills/rust-best-practices
+  mcp: []
