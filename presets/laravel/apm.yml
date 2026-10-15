@@ -1,0 +1,10 @@
+name: opencode-for-me-laravel
+version: 1.0.0
+description: Laravel testing with Pest (no dedicated Laravel skill selected).
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - spatie/freek.dev/.claude/skills/pest-testing
+  mcp: []

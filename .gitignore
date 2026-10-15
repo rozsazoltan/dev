@@ -19,7 +19,7 @@ __pycache__/
 Thumbs.db
 
 # Keep this repository limited to configurations and skill dependency metadata
-/.agents/skills/
-/.opencode/skills/
-/.claude/skills/
+**/.agents/skills/
+**/.opencode/skills/
+**/.claude/skills/
 /skills/

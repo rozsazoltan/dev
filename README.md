@@ -7,8 +7,8 @@ Personal [OpenCode](https://opencode.ai/) configuration and curated [APM](https:
 | Path | Purpose |
 | --- | --- |
 | `config/` | OpenCode settings, agent instructions, plugin config, prompts, Windows/WSL configs |
-| `apm.yml` | Curated third-party skill dependencies |
-| `skillsets.yml` | Technology → skill mapping (**reference only**, not an OpenCode feature) |
+| `apm.yml` | Full skill collection for global installation |
+| `presets/*/apm.yml` | Installable, project-specific APM skill collections |
 | `.apm/` | Versioned **snapshots** of user-level APM settings and marketplaces |
 | `scripts/` | Optional local helper scripts |
 | `.github/workflows/update-apm-skills.yml` | On-demand APM update → pull request |
@@ -54,7 +54,7 @@ To expose the latest OpenCode Desktop CLI in PowerShell, dot-source [`scripts/op
 
 ## APM skills
 
-`apm.yml` is the tracked source of dependencies. `skillsets.yml` documents which skills belong to Vue, PHP, Laravel, Rust, Tauri, etc.; it does **not** selectively activate them. The `.apm/` files in this repo are snapshots, not live user settings.
+The root `apm.yml` contains all curated skills for global use. Each `presets/<name>/apm.yml` is an independently installable APM package for a local project. `.apm/` contains snapshots of user-level CLI settings, not active repository configuration.
 
 ```bash
 # From the repository root: resolve and validate dependencies locally.
@@ -73,6 +73,43 @@ New-Item -ItemType Directory -Force -Path $globalApm | Out-Null
 Copy-Item ./apm.yml, ./apm.lock.yaml -Destination $globalApm -Force
 apm install -g --target opencode --frozen
 ```
+
+### Project presets
+
+From **your project's root directory** (not this repository), add only the skills you need:
+
+```bash
+# Vue 3 / TypeScript / Vite / Vitest / pnpm
+apm install rozsazoltan/opencode-for-me/presets/vue --target opencode
+
+# Laravel / Pest
+apm install rozsazoltan/opencode-for-me/presets/laravel --target opencode
+
+# Rust / Cargo
+apm install rozsazoltan/opencode-for-me/presets/rust --target opencode
+
+# Tauri (currently Rust guidance)
+apm install rozsazoltan/opencode-for-me/presets/tauri --target opencode
+
+# Compose presets when needed
+apm install rozsazoltan/opencode-for-me/presets/general rozsazoltan/opencode-for-me/presets/vue --target opencode
+```
+
+Available presets:
+
+| Preset | Skills |
+| --- | --- |
+| `general` | writing-for-agents, planning-with-files |
+| `javascript` | antfu, Vite, Vitest, pnpm (also TypeScript) |
+| `vue` | antfu, Vue, Vue best practices, Vite, Vitest, pnpm |
+| `php` / `laravel` | Pest 4 only; no general PHP/Laravel skill selected yet |
+| `rust` / `tauri` | Apollo Rust best practices; no dedicated Cargo/Tauri skill selected yet |
+| `ui` | hallmark |
+| `oxc-migration` | migrate-oxlint, migrate-oxfmt (migration tasks only) |
+
+Each preset is intentionally self-contained (dependencies may overlap). APM resolves and deduplicates transitive packages, then records them in the consuming project's `apm.lock.yaml`. Local projects manage their own versions; updating these presets here does not silently update existing projects. Use `apm update` inside a consuming project to refresh its pinned dependencies.
+
+Once [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills) is published, add selected first-party skills to the relevant presets. No skill sources live in this repository.
 
 The GitHub workflow updates the repository only; it does not update local or global OpenCode installations. `.agents/skills/` and other generated skill output are intentionally not versioned here. Third-party skill sources retain their licenses.
 
