@@ -74,6 +74,16 @@ Copy-Item ./apm.yml, ./apm.lock.yaml -Destination $globalApm -Force
 apm install -g --target opencode --frozen
 ```
 
+### Global installation
+
+Install the `global` preset once for your user account, so every project sees the skills without a per-project install:
+
+```bash
+apm install rozsazoltan/dev/presets/global -g --target opencode
+```
+
+The `-g` flag writes the user manifest to `~/.apm/apm.yml` and deploys the skills to `~/.config/opencode/skills/`.
+
 ### Project presets
 
 From **your project's root directory** (not this repository), add only the skills you need:
@@ -103,6 +113,7 @@ Available presets:
 | Preset | Skills |
 | --- | --- |
 | `general` | writing-for-agents, planning-with-files |
+| `global` | `general` + `anti-slop` presets |
 | `javascript` | antfu, Vite, Vitest, pnpm (also TypeScript) |
 | `vue` | antfu, Vue, Vue best practices, Vite, Vitest, pnpm |
 | `gsap` | GSAP core, frameworks, performance, plugins, React, ScrollTrigger, timelines, utilities |
@@ -113,7 +124,9 @@ Available presets:
 
 Each preset is intentionally self-contained (dependencies may overlap). APM resolves and deduplicates transitive packages, then records them in the consuming project's `apm.lock.yaml`. Local projects manage their own versions; updating these presets here does not silently update existing projects. Use `apm update` inside a consuming project to refresh its pinned dependencies.
 
-Once [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills) is published, add selected first-party skills to the relevant presets. No skill sources live in this repository.
+The `global` preset declares the `general` and `anti-slop` presets as its dependencies, so it installs exactly their skills without repeating them. Use it for user-scope installs; use the two source presets directly when a project needs only one of them.
+
+First-party skills live in [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills) at the repository root. No skill sources live in this repository.
 
 The GitHub workflow updates the repository only; it does not update local or global OpenCode installations. `.agents/skills/` and other generated skill output are intentionally not versioned here. Third-party skill sources retain their licenses.
 

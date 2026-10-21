@@ -1,0 +1,13 @@
+name: dev-global
+version: 1.0.0
+description: General writing and planning skills plus anti-slop review skills.
+author: rozsazoltan
+
+targets:
+  - opencode
+
+dependencies:
+  apm:
+    - rozsazoltan/dev/presets/general
+    - rozsazoltan/dev/presets/anti-slop
+  mcp: []
