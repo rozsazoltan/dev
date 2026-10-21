@@ -1,0 +1,17 @@
+name: dev-gsap
+version: 1.0.0
+description: GSAP animation skills.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - greensock/gsap-skills/skills/gsap-core
+  - greensock/gsap-skills/skills/gsap-frameworks
+  - greensock/gsap-skills/skills/gsap-performance
+  - greensock/gsap-skills/skills/gsap-plugins
+  - greensock/gsap-skills/skills/gsap-react
+  - greensock/gsap-skills/skills/gsap-scrolltrigger
+  - greensock/gsap-skills/skills/gsap-timeline
+  - greensock/gsap-skills/skills/gsap-utils
+  mcp: []
