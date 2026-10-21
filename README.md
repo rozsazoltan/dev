@@ -74,6 +74,16 @@ Copy-Item ./apm.yml, ./apm.lock.yaml -Destination $globalApm -Force
 apm install -g --target opencode --frozen
 ```
 
+### Global installation
+
+Install the `global` preset once for your user account, so every project sees the skills without a per-project install:
+
+```bash
+apm install rozsazoltan/dev/presets/global -g --target opencode
+```
+
+The `-g` flag writes the user manifest to `~/.apm/apm.yml` and deploys the skills to `~/.config/opencode/skills/`.
+
 ### Project presets
 
 From **your project's root directory** (not this repository), add only the skills you need:
@@ -103,6 +113,7 @@ Available presets:
 | Preset | Skills |
 | --- | --- |
 | `general` | writing-for-agents, planning-with-files |
+| `global` | `general` + `anti-slop` presets |
 | `javascript` | antfu, Vite, Vitest, pnpm (also TypeScript) |
 | `vue` | antfu, Vue, Vue best practices, Vite, Vitest, pnpm |
 | `gsap` | GSAP core, frameworks, performance, plugins, React, ScrollTrigger, timelines, utilities |
@@ -113,16 +124,6 @@ Available presets:
 | `oxc-migration` | migrate-oxlint, migrate-oxfmt (migration tasks only) |
 
 Each preset is intentionally self-contained (dependencies may overlap). APM resolves and deduplicates transitive packages, then records them in the consuming project's `apm.lock.yaml`. Local projects manage their own versions; updating these presets here does not silently update existing projects. Use `apm update` inside a consuming project to refresh its pinned dependencies.
-
-The `anti-slop` preset installs the deslop, humanizer, and hallmark skills. Install it from your project's root:
-
-```bash
-apm install rozsazoltan/dev/presets/anti-slop --target opencode
-```
-
-Each skill covers one dimension: `deslop` for code against the target branch, `humanizer` for prose and documentation, `hallmark` for UI audits. They are independent skills, so request the one that matches the work, for example `Use the deslop skill to clean up this diff` or `Use the humanizer skill to rewrite this README`.
-
-First-party skills are maintained in [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills).
 
 The GitHub workflow updates the repository only; it does not update local or global OpenCode installations. `.agents/skills/` and other generated skill output are intentionally not versioned here. Third-party skill sources retain their licenses.
 
