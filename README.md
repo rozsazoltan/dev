@@ -82,6 +82,9 @@ From **your project's root directory** (not this repository), add only the skill
 # Vue 3 / TypeScript / Vite / Vitest / pnpm
 apm install rozsazoltan/dev/presets/vue --target opencode
 
+# GSAP
+apm install rozsazoltan/dev/presets/gsap --target opencode
+
 # Laravel / Pest
 apm install rozsazoltan/dev/presets/laravel --target opencode
 
@@ -102,6 +105,7 @@ Available presets:
 | `general` | writing-for-agents, planning-with-files |
 | `javascript` | antfu, Vite, Vitest, pnpm (also TypeScript) |
 | `vue` | antfu, Vue, Vue best practices, Vite, Vitest, pnpm |
+| `gsap` | GSAP core, frameworks, performance, plugins, React, ScrollTrigger, timelines, utilities |
 | `php` / `laravel` | Pest 4 only; no general PHP/Laravel skill selected yet |
 | `rust` / `tauri` | Apollo Rust best practices; no dedicated Cargo/Tauri skill selected yet |
 | `ui` | hallmark |
