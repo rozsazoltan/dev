@@ -93,6 +93,8 @@ apm install -g --target opencode --frozen
 
 Neither the workflow nor this repository touches installed skills. Generated output such as `.agents/skills/` stays out of Git, and third-party skills keep their own licenses.
 
+If a user-scope install aborts on a lockfile path error, see [docs/troubleshooting.md](docs/troubleshooting.md).
+
 ## Extra CLI tools
 
 [bin](https://github.com/marcosnils/bin) installs release binaries; run it on the OS that needs them.
