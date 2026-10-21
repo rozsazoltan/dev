@@ -1,135 +1,101 @@
 # dev
 
-Personal [OpenCode](https://opencode.ai/) configuration and curated [APM](https://github.com/microsoft/apm) dependencies. Windows Desktop + WSL; manually maintained and reviewed in Git.
+My OpenCode setup and the APM skills I use: Windows desktop plus WSL, reviewed by hand before anything is applied.
 
 ## Layout
 
-| Path | Purpose |
+| Path | What it is |
 | --- | --- |
-| `config/` | OpenCode settings, agent instructions, plugin config, prompts, Windows/WSL configs |
-| `apm.yml` | Full skill collection for global installation |
-| `presets/*/apm.yml` | Installable, project-specific APM skill collections |
-| `.apm/` | Versioned **snapshots** of user-level APM settings and marketplaces |
-| `scripts/` | Optional local helper scripts |
-| `.github/workflows/update-apm-skills.yml` | On-demand APM update → pull request |
+| `config/` | OpenCode settings, agents, plugins, prompts |
+| `apm.yml` | Full skill set for the global install |
+| `presets/*/apm.yml` | Per-project installable skill sets |
+| `.apm/` | Snapshots of user-level APM settings |
+| `scripts/` | Local helpers |
+| `.github/workflows/update-apm-skills.yml` | Manual APM update that opens a pull request |
 
-Most skills are third-party APM dependencies. First-party skills live in [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills); globally installed skills remain outside this Git repository.
+Third-party skills come from their own repositories. First-party ones live in [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills).
 
 ## OpenCode
 
-Install the reviewed files from `config/` into your OpenCode user configuration directory (`$HOME/.config/opencode/`; on Windows, `%USERPROFILE%\.config\opencode\`). For example, from the repository root in **PowerShell**:
+Copy what you need from `config/` into `$HOME/.config/opencode/` (`%USERPROFILE%\.config\opencode\` on Windows). Back up the target first.
 
 ```powershell
 $target = Join-Path $HOME '.config/opencode'
-# Back up the existing target before overwriting any files.
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 Copy-Item ./config/opencode.jsonc, ./config/opencode-wsl.jsonc, ./config/AGENTS.md, ./config/dcp.jsonc, ./config/oh-my-opencode-slim.jsonc -Destination $target -Force
 Copy-Item ./config/prompts, ./config/oh-my-opencode-slim -Destination $target -Recurse -Force
 ```
 
-The `opencode.jsonc` file is for Windows; `opencode-wsl.jsonc` is for WSL. Both live in the **Windows** OpenCode configuration directory. In **WSL Bash**, link the WSL config to the Windows file using OpenCode's expected filename:
+`opencode.jsonc` is the Windows config and `opencode-wsl.jsonc` the WSL one. Both sit in the Windows config directory; WSL gets a symlink to the WSL file:
 
 ```bash
-# Requires WSL interop (cmd.exe) and the Windows setup above.
 win_home="$(wslpath -u "$(cmd.exe /C 'echo %USERPROFILE%' | tr -d '\r')")"
 win_config="$win_home/.config/opencode/opencode-wsl.jsonc"
 if [ -f "$win_config" ]; then
   mkdir -p "$HOME/.config/opencode"
   ln -s "$win_config" "$HOME/.config/opencode/opencode.jsonc"
-  readlink -f "$HOME/.config/opencode/opencode.jsonc"
 else
   printf 'Missing Windows config: %s\n' "$win_config" >&2
 fi
 ```
 
-This creates `~/.config/opencode/opencode.jsonc` (WSL symlink) → `/mnt/c/Users/<WindowsUser>/.config/opencode/opencode-wsl.jsonc` (Windows file). `ln -s` intentionally **does not overwrite** an existing WSL config; back it up before creating the link. Adjust the Windows skills path inside `config/opencode-wsl.jsonc` if your username or location differs.
+`ln -s` will not overwrite an existing file, so back up any WSL config first. Adjust the Windows skills path in `opencode-wsl.jsonc` if your username or location differs.
 
-Keep credentials in a local `.secrets/` folder, never in Git. The OpenCode configuration is preserved as supplied; check version-specific keys against your installed OpenCode before applying it.
+Credentials belong in a local `.secrets/` folder, never in Git. This is the config I actually run, not a neutral default, so check version-specific keys against your OpenCode build.
 
-To expose the latest OpenCode Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`](scripts/opencode-desktop.ps1) in your `$PROFILE`:
+To get the Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`](scripts/opencode-desktop.ps1) from `$PROFILE`:
 
 ```powershell
 . 'C:\path\to\dev\scripts\opencode-desktop.ps1'
 ```
 
-## APM skills
+## Skills
 
-The root `apm.yml` contains all curated skills for global use. Each `presets/<name>/apm.yml` is an independently installable APM package for a local project. `.apm/` contains snapshots of user-level CLI settings, not active repository configuration.
-
-```bash
-# From the repository root: resolve and validate dependencies locally.
-apm install --target opencode
-
-# Review and commit apm.lock.yaml (if created).
-# GitHub: Actions → Update APM Skills → Run workflow → review PR.
-```
-
-After approval, synchronize the reviewed `apm.yml` and `apm.lock.yaml` to the active **global** APM directory (`~/.apm/`), then deploy using your installed APM version. Example in PowerShell:
-
-```powershell
-$globalApm = Join-Path $HOME '.apm'
-New-Item -ItemType Directory -Force -Path $globalApm | Out-Null
-# Back up existing global APM files before running these commands.
-Copy-Item ./apm.yml, ./apm.lock.yaml -Destination $globalApm -Force
-apm install -g --target opencode --frozen
-```
-
-### Global installation
-
-Install the `global` preset once for your user account, so every project sees the skills without a per-project install:
+Install the global preset once per user:
 
 ```bash
 apm install rozsazoltan/dev/presets/global -g --target opencode
 ```
 
-The `-g` flag writes the user manifest to `~/.apm/apm.yml` and deploys the skills to `~/.config/opencode/skills/`.
+The `-g` flag writes `~/.apm/apm.yml` and deploys the skills to `~/.config/opencode/skills/`.
 
-### Project presets
-
-From **your project's root directory** (not this repository), add only the skills you need:
+For a project, run this from the project root and take only what that project needs:
 
 ```bash
-# Vue 3 / TypeScript / Vite / Vitest / pnpm
 apm install rozsazoltan/dev/presets/vue --target opencode
-
-# GSAP
 apm install rozsazoltan/dev/presets/gsap --target opencode
-
-# Laravel / Pest
 apm install rozsazoltan/dev/presets/laravel --target opencode
-
-# Rust / Cargo
 apm install rozsazoltan/dev/presets/rust --target opencode
-
-# Tauri (currently Rust guidance)
 apm install rozsazoltan/dev/presets/tauri --target opencode
-
-# Compose presets when needed
-apm install rozsazoltan/dev/presets/general rozsazoltan/dev/presets/vue --target opencode
 ```
-
-Available presets:
 
 | Preset | Skills |
 | --- | --- |
+| `global` | `general` + `anti-slop` |
 | `general` | writing-for-agents, planning-with-files |
-| `global` | `general` + `anti-slop` presets |
-| `javascript` | antfu, Vite, Vitest, pnpm (also TypeScript) |
-| `vue` | antfu, Vue, Vue best practices, Vite, Vitest, pnpm |
-| `gsap` | GSAP core, frameworks, performance, plugins, React, ScrollTrigger, timelines, utilities |
 | `anti-slop` | deslop, humanizer, hallmark |
-| `php` / `laravel` | Pest 4 only; no general PHP/Laravel skill selected yet |
-| `rust` / `tauri` | Apollo Rust best practices; no dedicated Cargo/Tauri skill selected yet |
-| `ui` | hallmark |
-| `oxc-migration` | migrate-oxlint, migrate-oxfmt (migration tasks only) |
+| `javascript` | antfu, Vite, Vitest, pnpm |
+| `vue` | `javascript` + Vue, Vue best practices |
+| `gsap` | GSAP core, frameworks, performance, plugins, React, ScrollTrigger, timelines, utilities |
+| `php` / `laravel` | Pest 4 only; no general PHP or Laravel skill picked yet |
+| `rust` / `tauri` | Apollo Rust best practices; no Cargo or Tauri skill picked yet |
+| `oxc-migration` | migrate-oxlint, migrate-oxfmt, for migration work |
 
-Each preset is intentionally self-contained (dependencies may overlap). APM resolves and deduplicates transitive packages, then records them in the consuming project's `apm.lock.yaml`. Local projects manage their own versions; updating these presets here does not silently update existing projects. Use `apm update` inside a consuming project to refresh its pinned dependencies.
+Presets stay self-contained, so dependencies may overlap. APM deduplicates them and pins the result in the consuming project's `apm.lock.yaml`. Updating a preset here does not update projects that already installed it; run `apm update` there.
 
-The GitHub workflow updates the repository only; it does not update local or global OpenCode installations. `.agents/skills/` and other generated skill output are intentionally not versioned here. Third-party skill sources retain their licenses.
+The root `apm.yml` is the full set for this machine. Validate it locally, then refresh the global copy:
+
+```powershell
+apm install --target opencode
+Copy-Item ./apm.yml, ./apm.lock.yaml -Destination (Join-Path $HOME '.apm') -Force
+apm install -g --target opencode --frozen
+```
+
+Neither the workflow nor this repository touches installed skills. Generated output such as `.agents/skills/` stays out of Git, and third-party skills keep their own licenses.
 
 ## Extra CLI tools
 
-Install release binaries with [bin](https://github.com/marcosnils/bin) (run on the OS where you need the tool):
+[bin](https://github.com/marcosnils/bin) installs release binaries; run it on the OS that needs them.
 
 ```sh
 bin install https://github.com/jesseduffield/lazygit
@@ -140,29 +106,27 @@ bin install https://github.com/dorssel/usbipd-win
 bin install https://github.com/edouard-claude/snip
 bin install https://github.com/mutagen-io/mutagen
 
-# Update bin-managed executables
 bin update
 ```
 
-`lazywslc` and `usbipd-win` are Windows-oriented. `bin install` retrieves the release executable; for `usbipd-win`, installing the system service/driver (if needed) is a separate step covered by the [upstream installer](https://github.com/dorssel/usbipd-win#how-to-install).
+`lazywslc` and `usbipd-win` are Windows only. For `usbipd-win` the system service and driver are a separate step in the [upstream installer](https://github.com/dorssel/usbipd-win#how-to-install).
 
-**snip:** Install it on the same machine as [@rozsazoltan/opencode-shell](https://github.com/rozsazoltan/opencode-shell) to enable the plugin's shell-output filtering. The plugin can also run without snip (mise environment handling is independent), but snip-based wrapping will be unavailable. Make sure `snip` is on the OpenCode server's `PATH` (or in `~/bin`).
+`snip` belongs on the same machine as [@rozsazoltan/opencode-shell](https://github.com/rozsazoltan/opencode-shell) if you want its shell-output filtering. The plugin runs without it, but the snip wrapping stays off. Keep `snip` on the OpenCode server's `PATH` or in `~/bin`.
 
-## mise (jdx/mise)
+## mise
 
-**Windows (standalone executable):** Download the latest matching Windows `.exe` from [jdx/mise releases](https://github.com/jdx/mise/releases/latest) (`windows-x64` for x64; `windows-arm64` for ARM64). Copy it to `D:\program\bin\mise.exe` (rename the downloaded executable to `mise.exe`). Ensure `D:\program\bin` is on `PATH`.
+**Windows:** download the matching `windows-x64` or `windows-arm64` executable from [jdx/mise releases](https://github.com/jdx/mise/releases/latest), rename it to `mise.exe`, and put it on `PATH`.
 
 ```powershell
 New-Item -ItemType Directory -Force 'D:\program\bin' | Out-Null
-# From the download folder; keep only the desired architecture's release file.
 Copy-Item '.\mise-v*-windows-x64.exe' 'D:\program\bin\mise.exe'
 mise --version
 mise self-update
 ```
 
-When installed from a standalone GitHub release binary, update mise itself with `mise self-update` (not `mise upgrade`, which upgrades tools managed *by* mise).
+A standalone binary updates with `mise self-update`, not `mise upgrade`, which upgrades the tools mise manages.
 
-**Fedora / supported RHEL (DNF):** Enable the mise COPR repository, install, and later upgrade using DNF:
+**Fedora and supported RHEL:**
 
 ```bash
 sudo dnf copr enable jdxcode/mise
@@ -170,19 +134,16 @@ sudo dnf install -y mise
 sudo dnf upgrade --refresh mise
 ```
 
-**Debian / Ubuntu (APT):** Enable the mise package repository using `extrepo`, then install and update using APT:
+**Debian and Ubuntu:**
 
 ```bash
 sudo apt install -y extrepo
 sudo extrepo enable mise
 sudo apt update
 sudo apt install -y mise
-# Later:
-sudo apt update
-sudo apt install --only-upgrade -y mise
 ```
 
-For package-manager installations, **update via DNF/APT**, not `mise self-update`. Check with `mise --version` and `mise doctor`. See the [official mise installation guide](https://mise.jdx.dev/installing-mise.html) for distro/version-specific requirements.
+Package-manager installs update through DNF or APT, never `mise self-update`. Check with `mise --version` and `mise doctor`. The [official guide](https://mise.jdx.dev/installing-mise.html) covers distro-specific requirements.
 
 ## License
 
