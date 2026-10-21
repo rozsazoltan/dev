@@ -13,7 +13,7 @@ Personal [OpenCode](https://opencode.ai/) configuration and curated [APM](https:
 | `scripts/` | Optional local helper scripts |
 | `.github/workflows/update-apm-skills.yml` | On-demand APM update → pull request |
 
-No skills are authored in this repository. My own skills will live in [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills) and be installed via APM once published. Globally installed skills remain outside this Git repository.
+Most skills are third-party APM dependencies. First-party skills live in [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills); globally installed skills remain outside this Git repository.
 
 ## OpenCode
 
@@ -117,16 +117,13 @@ Available presets:
 | `javascript` | antfu, Vite, Vitest, pnpm (also TypeScript) |
 | `vue` | antfu, Vue, Vue best practices, Vite, Vitest, pnpm |
 | `gsap` | GSAP core, frameworks, performance, plugins, React, ScrollTrigger, timelines, utilities |
+| `anti-slop` | deslop, humanizer, hallmark |
 | `php` / `laravel` | Pest 4 only; no general PHP/Laravel skill selected yet |
 | `rust` / `tauri` | Apollo Rust best practices; no dedicated Cargo/Tauri skill selected yet |
 | `ui` | hallmark |
 | `oxc-migration` | migrate-oxlint, migrate-oxfmt (migration tasks only) |
 
 Each preset is intentionally self-contained (dependencies may overlap). APM resolves and deduplicates transitive packages, then records them in the consuming project's `apm.lock.yaml`. Local projects manage their own versions; updating these presets here does not silently update existing projects. Use `apm update` inside a consuming project to refresh its pinned dependencies.
-
-The `global` preset declares the `general` and `anti-slop` presets as its dependencies, so it installs exactly their skills without repeating them. Use it for user-scope installs; use the two source presets directly when a project needs only one of them.
-
-First-party skills live in [`rozsazoltan/skills`](https://github.com/rozsazoltan/skills) at the repository root. No skill sources live in this repository.
 
 The GitHub workflow updates the repository only; it does not update local or global OpenCode installations. `.agents/skills/` and other generated skill output are intentionally not versioned here. Third-party skill sources retain their licenses.
 

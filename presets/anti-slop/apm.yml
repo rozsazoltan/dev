@@ -1,0 +1,14 @@
+name: dev-anti-slop
+version: 1.0.0
+description: Anti-slop review skills for code, prose, and UI.
+author: rozsazoltan
+
+targets:
+  - opencode
+
+dependencies:
+  apm:
+    - cursor/plugins/cursor-team-kit/skills/deslop
+    - blader/humanizer
+    - nutlope/hallmark/skills/hallmark
+  mcp: []
