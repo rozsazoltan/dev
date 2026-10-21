@@ -16,6 +16,16 @@ dependencies:
     - OthmanAdi/planning-with-files/skills/planning-with-files
     - nutlope/hallmark/skills/hallmark
 
+    # GSAP
+    - greensock/gsap-skills/skills/gsap-core
+    - greensock/gsap-skills/skills/gsap-frameworks
+    - greensock/gsap-skills/skills/gsap-performance
+    - greensock/gsap-skills/skills/gsap-plugins
+    - greensock/gsap-skills/skills/gsap-react
+    - greensock/gsap-skills/skills/gsap-scrolltrigger
+    - greensock/gsap-skills/skills/gsap-timeline
+    - greensock/gsap-skills/skills/gsap-utils
+
     # JavaScript / TypeScript / Vue / Vite / Vitest / pnpm
     - antfu/skills/skills/antfu
     - antfu/skills/skills/vue
