@@ -7,8 +7,7 @@ My OpenCode setup and the APM skills I use: Windows desktop plus WSL, reviewed b
 | Path | What it is |
 | --- | --- |
 | `config/` | OpenCode settings, agents, plugins, prompts |
-| `apm.yml` | Full skill set for the global install |
-| `presets/*/apm.yml` | Per-project installable skill sets |
+| `presets/*/apm.yml` | Installable global and project skill sets |
 | `.apm/` | Snapshots of user-level APM settings |
 | `scripts/` | Local helpers |
 | `.github/workflows/update-apm-skills.yml` | Manual APM update that opens a pull request |
@@ -82,14 +81,6 @@ apm install rozsazoltan/dev/presets/tauri --target opencode
 | `oxc-migration` | migrate-oxlint, migrate-oxfmt, for migration work |
 
 Presets stay self-contained, so dependencies may overlap. APM deduplicates them and pins the result in the consuming project's `apm.lock.yaml`. Updating a preset here does not update projects that already installed it; run `apm update` there.
-
-The root `apm.yml` is the full set for this machine. Validate it locally, then refresh the global copy:
-
-```powershell
-apm install --target opencode
-Copy-Item ./apm.yml, ./apm.lock.yaml -Destination (Join-Path $HOME '.apm') -Force
-apm install -g --target opencode --frozen
-```
 
 Neither the workflow nor this repository touches installed skills. Generated output such as `.agents/skills/` stays out of Git, and third-party skills keep their own licenses.
 
