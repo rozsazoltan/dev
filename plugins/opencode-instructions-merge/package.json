@@ -1,5 +1,5 @@
 {
-  "name": "@rozsazoltan/opencode-instructions-merge",
+  "name": "@rozsazoltan/opencode-instruction-merge",
   "version": "0.1.0",
   "description": "Merge explicit Markdown instruction sources into one OpenCode V2 system context block.",
   "type": "module",
