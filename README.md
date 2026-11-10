@@ -42,6 +42,8 @@ fi
 
 Credentials belong in a local `.secrets/` folder, never in Git. This is the config I actually run, not a neutral default, so check version-specific keys against your OpenCode build.
 
+See the [OpenCode Instructions Merge plugin](plugins/opencode-instructions-merge/README.md) for an optional plugin that combines explicitly configured Markdown instruction sources.
+
 To get the Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`](scripts/opencode-desktop.ps1) from `$PROFILE`:
 
 ```powershell

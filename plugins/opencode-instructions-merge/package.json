@@ -1,0 +1,28 @@
+{
+  "name": "@rozsazoltan/opencode-instructions-merge",
+  "version": "0.1.0",
+  "description": "Merge explicit Markdown instruction sources into one OpenCode V2 system context block.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": ["opencode", "plugin", "instructions", "system-context"]
+}
