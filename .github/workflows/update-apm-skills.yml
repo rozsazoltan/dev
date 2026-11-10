@@ -19,11 +19,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Update APM skills
+      - name: Set up APM CLI
         uses: microsoft/apm-action@v1
         with:
-          update: 'true'
-          audit-report: 'true'
+          setup-only: 'true'
 
       - name: Update preset dependencies
         shell: bash
