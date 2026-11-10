@@ -5,11 +5,9 @@
       "package": "github:rozsazoltan/dev#master::path:plugins/opencode-instructions-merge",
       "options": {
         "sources": [
-          "~/.config/opencode/instructions/rozsazoltan.md",
-          "~/.config/opencode/instructions/git-worktrees.md",
-          "~/.config/opencode/instructions/planning-files.md",
-          "~/.config/opencode/instructions/caveman.md"
+          "~/.config/opencode/instructions"
         ],
+        "exclude": ["draft.md", "old.md"],
         "includeCompaction": true,
         "onMissing": "warn"
       }

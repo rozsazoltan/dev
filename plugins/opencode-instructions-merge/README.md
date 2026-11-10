@@ -44,7 +44,7 @@ Use the *object form* in global `~/.config/opencode/opencode.jsonc` to pass opti
 
 A full example appears in `examples/opencode.global.jsonc`. When OpenCode configuration already has the plugin listed as a string, **replace** that entry with the object form rather than enabling two copies.
 
-To pin updates, use a full Git commit SHA in place of `main` after validating the package.
+To pin updates, use a full Git commit SHA in place of `master` after validating the package.
 
 ## Local development
 
@@ -57,6 +57,7 @@ For a local checkout of `dev` and a *global* `opencode.jsonc`, reference the plu
       "package": "D:/github/rozsazoltan/dev/plugins/opencode-instructions-merge",
       "options": {
         "sources": ["~/.config/opencode/instructions"],
+        "exclude": ["draft.md", "old.md"],
         "onMissing": "warn"
       }
     }
@@ -73,10 +74,13 @@ WSL example path: `/github/rozsazoltan/dev/plugins/opencode-instructions-merge`.
 | Option | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `sources` | `string[]` | required | Explicit `.md` files or directories; directories contribute their immediate `.md` children. |
+| `exclude` | `string[]` | `[]` | Exact `.md` basenames to skip in configured directories; case-insensitive, no globs. |
 | `includeCompaction` | `boolean` | `false` | Also inject same instructions into compaction requests. |
 | `onMissing` | `"warn" \| "ignore" \| "error"` | `"warn"` | Missing or skipped source behavior. |
 | `maxFileBytes` | `number` | `65536` | Maximum bytes per file (max: 1 MiB). |
 | `maxTotalBytes` | `number` | `262144` | Combined maximum bytes (max: 4 MiB). |
+
+Exclusions apply only to immediate files found inside configured directories. Explicit file sources still load even when their basename appears in `exclude`.
 
 One joined system text part is appended through `ctx.session.hook("context", ...)`, and optionally `ctx.session.hook("compaction", ...)`. Other system parts are not modified. Plugin does **not** affect titles or auxiliary generation requests. OpenCode native `AGENTS.md`, project instructions, policies and higher-priority system rules still apply.
 

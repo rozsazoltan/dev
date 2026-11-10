@@ -6,6 +6,7 @@ export type MissingPolicy = "warn" | "ignore" | "error"
 
 export interface MergeConfig {
   sources: string[]
+  exclude?: string[]
   onMissing: MissingPolicy
   maxFileBytes: number
   maxTotalBytes: number
@@ -44,6 +45,23 @@ export function parseOptions(raw: Record<string, unknown>): MergeConfig {
     }
     return source.trim()
   })
+  const rawExclude = raw.exclude === undefined ? [] : raw.exclude
+  if (!Array.isArray(rawExclude)) {
+    throw new Error("options.exclude must be an array of Markdown filenames")
+  }
+  const exclude = rawExclude.map((filename, index) => {
+    if (
+      typeof filename !== "string" ||
+      filename.length === 0 ||
+      !filename.toLowerCase().endsWith(".md") ||
+      filename.includes("/") ||
+      filename.includes("\\") ||
+      filename.includes("\0")
+    ) {
+      throw new Error(`options.exclude[${index}] must be a nonempty .md basename without path separators`)
+    }
+    return filename.toLowerCase()
+  })
   const onMissing = raw.onMissing ?? "warn"
   if (onMissing !== "warn" && onMissing !== "ignore" && onMissing !== "error") {
     throw new Error('options.onMissing must be "warn", "ignore", or "error"')
@@ -58,6 +76,7 @@ export function parseOptions(raw: Record<string, unknown>): MergeConfig {
   }
   return {
     sources,
+    exclude,
     onMissing,
     maxFileBytes,
     maxTotalBytes,
@@ -87,6 +106,7 @@ export async function mergeInstructions(config: MergeConfig, projectRoot: string
   const files: string[] = []
   const blocks: string[] = []
   const visited = new Set<string>()
+  const excluded = new Set((config.exclude ?? []).map((filename) => filename.toLowerCase()))
   let totalBytes = 0
 
   const report = (message: string): void => {
@@ -165,7 +185,7 @@ export async function mergeInstructions(config: MergeConfig, projectRoot: string
     let entries
     try {
       entries = (await readdir(path, { withFileTypes: true }))
-        .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".md"))
+        .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".md") && !excluded.has(entry.name.toLowerCase()))
         .sort((a, b) => a.name.localeCompare(b.name, "en"))
     } catch (error) {
       if (config.onMissing === "error") throw error
