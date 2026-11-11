@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "github:rozsazoltan/dev#master::path:plugins/opencode-instructions",
+      "options": {
+        "sources": [
+          "~/.config/opencode/instructions"
+        ],
+        "exclude": ["draft.md", "old.md"],
+        "includeCompaction": true,
+        "onMissing": "warn"
+      }
+    }
+  ]
+}

@@ -48,6 +48,10 @@ To get the Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`
 . 'C:\path\to\dev\scripts\opencode-desktop.ps1'
 ```
 
+## Plugins
+
+- [`@rozsazoltan/opencode-instructions`](plugins/opencode-instructions/README.md)
+
 ## Skills
 
 Install the global preset once per user:

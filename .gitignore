@@ -9,7 +9,9 @@
 *.pfx
 **/apm_modules/
 .planning/
+.worktrees/
 .slim/
+plugins/opencode-instructions/node_modules/
 **/.opencode/logs/
 **/.opencode/cache/
 **/.snip/
