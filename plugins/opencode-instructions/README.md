@@ -12,10 +12,10 @@ OpenCode V2 server plugin that reads explicit Markdown files and directories and
 
 ## Install from shared monorepo
 
-After this package is committed to `rozsazoltan/dev/plugins/opencode-instructions-merge`, add its package through the OpenCode V2 plugin manager:
+After this package is committed to `rozsazoltan/dev/plugins/opencode-instructions`, add its package through the OpenCode V2 plugin manager:
 
 ```bash
-opencode plugin add 'github:rozsazoltan/dev#master::path:plugins/opencode-instructions-merge'
+opencode plugin add 'github:rozsazoltan/dev#master::path:plugins/opencode-instructions'
 ```
 
 The package is separate from APM's `plugin.json` bundles. **Do not assume `apm install` will install an executable OpenCode V2 server plugin.**
@@ -26,7 +26,7 @@ Use the *object form* in global `~/.config/opencode/opencode.jsonc` to pass opti
 {
   "plugins": [
     {
-      "package": "github:rozsazoltan/dev#master::path:plugins/opencode-instructions-merge",
+      "package": "github:rozsazoltan/dev#master::path:plugins/opencode-instructions",
       "options": {
         "sources": [
           "~/.config/opencode/instructions/rozsazoltan.md",
@@ -54,7 +54,7 @@ For a local checkout of `dev` and a *global* `opencode.jsonc`, reference the plu
 {
   "plugins": [
     {
-      "package": "D:/github/rozsazoltan/dev/plugins/opencode-instructions-merge",
+      "package": "D:/github/rozsazoltan/dev/plugins/opencode-instructions",
       "options": {
         "sources": ["~/.config/opencode/instructions"],
         "exclude": ["draft.md", "old.md"],
@@ -65,7 +65,7 @@ For a local checkout of `dev` and a *global* `opencode.jsonc`, reference the plu
 }
 ```
 
-WSL example path: `/github/rozsazoltan/dev/plugins/opencode-instructions-merge`.
+WSL example path: `/github/rozsazoltan/dev/plugins/opencode-instructions`.
 
 `~` resolves to the current user's home directory on both platforms. Relative instruction paths resolve from the **canonical project checkout**, not from the plugin's package directory and not from the current working directory. Prefer `~` or absolute paths for global instructions.
 
@@ -96,7 +96,7 @@ The plugin injects configured Markdown as model instructions. Configure **truste
 ## Development and validation
 
 ```bash
-cd plugins/opencode-instructions-merge
+cd plugins/opencode-instructions
 npm install
 npm test
 npm run typecheck

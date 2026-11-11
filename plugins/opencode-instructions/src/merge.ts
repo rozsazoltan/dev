@@ -25,7 +25,7 @@ const MAX_FILE_LIMIT = 1024 * 1024
 const MAX_TOTAL_LIMIT = 4 * 1024 * 1024
 const MAX_SOURCES = 64
 const MAX_DIRECTORY_FILES = 128
-export const INSTRUCTION_MARKER = "<!-- opencode-instructions-merge:v1 -->"
+export const INSTRUCTION_MARKER = "<!-- opencode-instructions:v1 -->"
 
 function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, name: string): number {
   if (value === undefined) return fallback

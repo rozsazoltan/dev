@@ -11,7 +11,7 @@
 .planning/
 .worktrees/
 .slim/
-plugins/opencode-instructions-merge/node_modules/
+plugins/opencode-instructions/node_modules/
 **/.opencode/logs/
 **/.opencode/cache/
 **/.snip/
