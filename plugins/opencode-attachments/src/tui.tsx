@@ -41,7 +41,7 @@ function message(error: unknown): string {
  * wherever the user types. Nothing here reads the disk; the server half owns the bytes.
  */
 export default Plugin.define({
-  id: "rozsazoltan.opencode-attachments.tui",
+  id: "opencode-attachments.tui",
   setup(context) {
     const TEXT = themeColour(context.theme, ["text", "base"]) ?? FALLBACK_TEXT
     const DIM = themeColour(context.theme, ["text", "muted"], ["text", "faint"]) ?? FALLBACK_DIM

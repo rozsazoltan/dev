@@ -39,7 +39,7 @@ function fakeContext() {
 test("exposes the plugin id and registers exactly one tool", async () => {
   const { context, tools } = fakeContext()
   const cleanup = await plugin.setup(context)
-  assert.equal(plugin.id, "rozsazoltan.opencode-attachments")
+  assert.equal(plugin.id, "opencode-attachments")
   assert.deepEqual([...tools.keys()], ["attachment_to_file"])
   await cleanup?.()
 })

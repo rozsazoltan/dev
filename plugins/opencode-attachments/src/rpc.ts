@@ -64,7 +64,7 @@ const AttachmentSchema = {
  * only import modules the app already provides.
  */
 export const Attachments = Rpc.define({
-  id: "rozsazoltan.opencode-attachments",
+  id: "opencode-attachments",
   methods: {
     list: {
       input: {

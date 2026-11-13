@@ -64,7 +64,7 @@ async function bytesOf(record: AttachmentRecord): Promise<Buffer> {
 
 /** OpenCode V2 server plugin: captures prompt attachments, writes them on demand, and serves both UI halves. */
 export default Plugin.define({
-  id: "rozsazoltan.opencode-attachments",
+  id: "opencode-attachments",
   async setup(ctx) {
     const rpc = await ctx.rpc.register(Attachments, {
       list: async (raw) => {
