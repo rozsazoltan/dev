@@ -111,6 +111,23 @@ opencode plugin list
 
 `npm run build` writes the two UI bundles the host loads: `dist/gui-experimental.cjs` and `dist/tui.js`. Commit them with the source, because `./tui` and `./gui-experimental` point at the built files.
 
+### Local development mode
+
+This repository loads the plugin from its own checkout, so a change can be tried before it is published or merged. The repository root has `.opencode/opencode.json`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["../plugins/opencode-attachments"]
+}
+```
+
+A path in `plugins` resolves against the config file's directory, so `../plugins/opencode-attachments` is this repository's `plugins/` folder. OpenCode reads the package `exports` and loads the server, RPC, terminal, and desktop parts from it. Prefix a package name with `-` to disable an installed copy while the local one is active, as in `["-@rozsazoltan/opencode-attachments", "../plugins/opencode-attachments"]`.
+
+- Run `npm run build` after a TUI or desktop source change, because both halves load the built bundles.
+- The server part and `attachment_to_file` appear on the next reload of the server. The sidebar block, `/attachments`, and the desktop header button appear when the terminal or desktop window reloads.
+- The local package needs its own `npm install` once; the host resolves `@opencode/plugin`, `@opentui/*`, and `solid-js` from the app, and the package declares the last two as peer dependencies for that reason.
+
 **Validation status:** `npm install --ignore-scripts`, 20 unit tests, TypeScript typecheck, and both bundle builds pass locally. Remote Git subdirectory loading and live OpenCode desktop/terminal integration remain unverified.
 
 ## Troubleshooting
