@@ -50,6 +50,7 @@ To get the Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`
 
 ## Plugins
 
+- [`@rozsazoltan/opencode-attachments`](plugins/opencode-attachments/README.md)
 - [`@rozsazoltan/opencode-instructions`](plugins/opencode-instructions/README.md)
 
 ## Skills

@@ -1,0 +1,28 @@
+{
+  "name": "@rozsazoltan/opencode-attachments",
+  "version": "0.1.0",
+  "description": "OpenCode V2 tool that writes chat attachments to a chosen file path without saving them automatically.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": ["opencode", "plugin", "attachments", "tool"]
+}
