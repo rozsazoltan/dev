@@ -1,6 +1,6 @@
 # OpenCode Attachments
 
-OpenCode V2 server plugin that lets the agent turn a chat attachment into a real file at a path and name **it chooses**, and only when it decides a file is needed.
+OpenCode V2 plugin that lets the agent turn a chat attachment into a real file at a path and name **it chooses**, and only when it decides a file is needed — plus a TUI sidebar list and a desktop header button to browse the conversation's attachments and save any of them by hand.
 
 - Pasting a file into the chat never writes anything to disk.
 - The plugin keeps the attachment bytes in memory for the current session and exposes one tool, `attachment_to_file`.
@@ -8,6 +8,7 @@ OpenCode V2 server plugin that lets the agent turn a chat attachment into a real
 - Without a `path`, the file goes to a per-session OpenCode temp directory: `<os tmpdir>/opencode/attachments/<sessionID>/`.
 - Existing files are never replaced unless the call sets `overwrite: true`.
 - `@file` mentions that are already real files return their existing path instead of being copied.
+- Both UI halves list the attachments oldest first with their name, size, and whether they are still unwritten, temp, or saved, and where.
 
 ## Requirements
 
@@ -71,9 +72,26 @@ Wrote /srv/www/assets/hero.webp (image/webp, 184320 bytes)
 
 Typical use: the agent pastes an image into the chat, then calls `attachment_to_file` with the path where the site expects the background image. No manual copy step is needed.
 
+## Terminal half
+
+The package ships a TUI part as `./tui`, built from `src/tui.tsx` into `dist/tui.js`.
+
+- The session sidebar gets an **Attachments** block: the last six attachments of the open conversation, oldest last, each with its 1-based position, name, status (`not written`, `temp`, `saved`), size, and the path when one exists.
+- Clicking a row asks for a **full destination path**, prefilled with the temp path or the last written file. Enter writes it; an existing file asks for confirmation before it is replaced.
+- `/attachments` (palette entry **Attachments of this conversation**) lists every attachment of the session in a picker with the same columns, then opens the same save prompt. A terminal has no native file picker, so the path is typed.
+
+## Desktop half
+
+The package ships a GUI part as `./gui-experimental`, built from `src/gui.tsx` into `dist/gui-experimental.cjs`. This half rides on the experimental desktop API and can break on an app update.
+
+- A **Files N** button in the session header opens the attachment list, oldest first.
+- **Save as…** opens the system folder picker, then asks for the file name, and the server part writes the bytes. The overwrite confirmation appears when the target exists.
+- **Show in folder** reveals the written file in the file manager, and **Copy path** copies it. Both are hidden until a file exists; the folder picker needs the desktop app.
+
 ## Behavior and limits
 
-- Attachment bytes are captured in `ctx.session.hook("prompt", ...)` and held **in memory** for up to four sessions; nothing is decoded or written until the tool runs.
+- Attachment bytes are captured in `ctx.session.hook("prompt", ...)` and held **in memory** for up to four sessions; nothing is decoded or written until the tool runs or a UI half saves one.
+- The attachment history (names, order, written paths, status) is **memory only**: it disappears when the server process restarts, and a restart drops the bytes too. A file already written stays on disk and can be found there, but it is no longer listed.
 - Only inline `data:` URLs can be written. Stored `media:` references are not readable from the plugin context and produce a clear error.
 - Attachments above 25 MiB are rejected rather than written.
 - A tool call in a **subagent** session does not see attachments from the parent session, because each session keeps its own list.
@@ -85,12 +103,15 @@ Typical use: the agent pastes an image into the chat, then calls `attachment_to_
 ```bash
 cd plugins/opencode-attachments
 npm install
+npm run build
 npm test
 npm run typecheck
 opencode plugin list
 ```
 
-**Validation status:** `npm install --ignore-scripts`, 15 unit tests, and TypeScript typecheck pass locally. Remote Git subdirectory loading and live OpenCode integration remain unverified.
+`npm run build` writes the two UI bundles the host loads: `dist/gui-experimental.cjs` and `dist/tui.js`. Commit them with the source, because `./tui` and `./gui-experimental` point at the built files.
+
+**Validation status:** `npm install --ignore-scripts`, 20 unit tests, TypeScript typecheck, and both bundle builds pass locally. Remote Git subdirectory loading and live OpenCode desktop/terminal integration remain unverified.
 
 ## Troubleshooting
 

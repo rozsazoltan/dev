@@ -1,5 +1,5 @@
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { readFile } from "node:fs/promises"
+import { isAbsolute, join } from "node:path"
 import { Plugin } from "@opencode/plugin"
 import {
   AttachmentError,
@@ -10,22 +10,19 @@ import {
   sanitizeFileName,
   selectAttachment,
   writeAttachment,
-  type CapturedAttachment,
 } from "./materialize.ts"
-
-/** Latest attached files per session, kept only in memory: nothing touches the disk until the tool runs. */
-const MAX_SESSIONS = 4
-const sessions = new Map<string, readonly CapturedAttachment[]>()
-
-function remember(sessionID: string, files: readonly CapturedAttachment[]): void {
-  sessions.delete(sessionID)
-  sessions.set(sessionID, files)
-  while (sessions.size > MAX_SESSIONS) {
-    const oldest = sessions.keys().next().value
-    if (oldest === undefined) return
-    sessions.delete(oldest)
-  }
-}
+import {
+  clearRecords,
+  describe,
+  fileStatus,
+  findRecord,
+  listRecords,
+  recordPrompt,
+  recordWrite,
+  sessionTempDir,
+  type AttachmentRecord,
+} from "./registry.ts"
+import { Attachments, type ListRequest, type SaveRequest } from "./rpc.ts"
 
 const input = {
   type: "object",
@@ -58,14 +55,46 @@ interface ToolInput {
   readonly overwrite?: boolean
 }
 
-/** OpenCode V2 server plugin: captures prompt attachments and exposes one on-demand write tool. */
+/** Bytes behind a record: inline data for pastes, the file itself for a TUI `@file` mention. */
+async function bytesOf(record: AttachmentRecord): Promise<Buffer> {
+  const existing = existingFilePath(record.uri)
+  if (existing) return readFile(existing)
+  return decodeAttachment(record).bytes
+}
+
+/** OpenCode V2 server plugin: captures prompt attachments, writes them on demand, and serves both UI halves. */
 export default Plugin.define({
   id: "rozsazoltan.opencode-attachments",
   async setup(ctx) {
+    const rpc = await ctx.rpc.register(Attachments, {
+      list: async (raw) => {
+        const request = raw as ListRequest
+        return {
+          attachments: listRecords(request.sessionID).map((record) => describe(request.sessionID, record)),
+          directory: sessionTempDir(request.sessionID),
+        }
+      },
+      save: async (raw) => {
+        const request = raw as SaveRequest
+        const record = findRecord(request.sessionID, request.id)
+        if (!record) throw new Error("Attachment is no longer in memory. Paste it into the chat again.")
+        if (!isAbsolute(request.directory)) throw new Error(`Destination must be an absolute directory: ${request.directory}`)
+
+        const name = sanitizeFileName(request.name ?? "") || record.name
+        const target = join(request.directory, name)
+        const written = await writeAttachment(target, await bytesOf(record), {
+          overwrite: request.overwrite === true,
+        })
+        recordWrite(record, written)
+        await rpc.events.emit("changed", { sessionID: request.sessionID })
+        return { path: written, status: fileStatus(request.sessionID, written) }
+      },
+    })
+
     await ctx.session.hook("prompt", (event) => {
       const files = event.prompt.files ?? []
       if (files.length === 0) return
-      remember(
+      recordPrompt(
         event.sessionID,
         files.map((file) => ({ uri: file.uri, name: file.name })),
       )
@@ -83,30 +112,33 @@ export default Plugin.define({
         input,
         async execute(raw, context) {
           const request = raw as ToolInput
-          const files = sessions.get(context.sessionID) ?? []
+          const records = listRecords(context.sessionID)
           try {
-            const selected = selectAttachment(files, request.attachment)
+            const record = selectAttachment(records, request.attachment)
 
-            const alreadyOnDisk = existingFilePath(selected.uri)
+            const alreadyOnDisk = existingFilePath(record.uri)
             if (alreadyOnDisk) {
+              recordWrite(record, alreadyOnDisk)
+              await rpc.events.emit("changed", { sessionID: context.sessionID })
               return {
                 content: `Attachment is already a file: ${alreadyOnDisk}`,
                 metadata: { path: alreadyOnDisk, existing: true },
               }
             }
 
-            const decoded = decodeAttachment(selected)
-            const index = files.indexOf(selected) + 1
-            const fallbackName = sanitizeFileName(selected.name ?? "") || defaultFileName(decoded.mime, index)
+            const decoded = decodeAttachment(record)
+            const fallbackName = sanitizeFileName(record.name) || defaultFileName(decoded.mime, record.order)
             const target = resolveTarget({
               path: request.path,
               name: request.name,
               baseDir: ctx.location.project.canonical || ctx.location.directory,
-              defaultDir: join(tmpdir(), "opencode", "attachments", context.sessionID),
+              defaultDir: sessionTempDir(context.sessionID),
               fallbackName,
             })
 
             const written = await writeAttachment(target, decoded.bytes, { overwrite: request.overwrite === true })
+            recordWrite(record, written)
+            await rpc.events.emit("changed", { sessionID: context.sessionID })
             return {
               content: `Wrote ${written} (${decoded.mime}, ${decoded.bytes.byteLength} bytes)`,
               metadata: { path: written, mime: decoded.mime, bytes: decoded.bytes.byteLength },
@@ -120,7 +152,7 @@ export default Plugin.define({
     })
 
     return () => {
-      sessions.clear()
+      clearRecords()
     }
   },
 })

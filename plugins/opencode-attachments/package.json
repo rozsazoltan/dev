@@ -1,28 +1,49 @@
 {
   "name": "@rozsazoltan/opencode-attachments",
-  "version": "0.1.0",
-  "description": "OpenCode V2 tool that writes chat attachments to a chosen file path without saving them automatically.",
+  "version": "0.2.0",
+  "description": "OpenCode V2 plugin that keeps chat attachments in memory until something needs a real file, with TUI and GUI lists to save them.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tui": "./dist/tui.js",
+    "./rpc": "./src/rpc.ts",
+    "./gui-experimental": "./dist/gui-experimental.cjs"
   },
   "files": [
     "src",
+    "dist",
     "README.md"
   ],
   "scripts": {
+    "build": "vite build && vite build --config vite.tui.config.ts",
     "test": "node --experimental-strip-types --test test/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@opencode/plugin": "2.2.7"
   },
+  "peerDependencies": {
+    "@opentui/solid": ">=0.8.1",
+    "solid-js": ">=1.9.0"
+  },
   "devDependencies": {
+    "@opencode/theme": "2.2.7",
+    "@opentui/core": ">=0.8.1",
+    "@opentui/solid": ">=0.8.1",
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.0"
+    "solid-js": "^1.9.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "vite-plugin-solid": "^2.11.0"
   },
   "engines": {
     "node": ">=22"
   },
-  "keywords": ["opencode", "plugin", "attachments", "tool"]
+  "keywords": [
+    "opencode",
+    "plugin",
+    "attachments",
+    "tui",
+    "gui"
+  ]
 }

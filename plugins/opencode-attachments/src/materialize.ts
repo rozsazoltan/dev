@@ -111,7 +111,7 @@ export function sanitizeFileName(name: string): string {
   return cleaned
 }
 
-export function selectAttachment(files: readonly CapturedAttachment[], selector?: string): CapturedAttachment {
+export function selectAttachment<T extends CapturedAttachment>(files: readonly T[], selector?: string): T {
   if (files.length === 0) {
     throw new AttachmentError("The current session has no attachments. Paste the file into the chat, then call this tool.")
   }
