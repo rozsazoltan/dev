@@ -202,6 +202,13 @@ export default Plugin.define({
       const location = current.location
       const capturedAttachment = attachment
       const layout = ctx.layout as typeof ctx.layout & LayoutWithDirectoryPicker
+      if (typeof layout.pickDirectory !== "function") {
+        await ctx.dialogs.alert({
+          title: "Save failed",
+          description: "This OpenCode build has no server directory picker. Update OpenCode Desktop and try again.",
+        })
+        return
+      }
       const folder = await layout.pickDirectory({ server: server.id, title: "Save attachment to" })
       if (!folder) return
 
