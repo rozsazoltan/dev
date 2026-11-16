@@ -30,6 +30,7 @@ var Attachments = Rpc.define({
 								name: { type: "string" },
 								mime: { type: "string" },
 								bytes: { type: "integer" },
+								createdAt: { type: "string" },
 								status: {
 									type: "string",
 									enum: [
@@ -59,6 +60,26 @@ var Attachments = Rpc.define({
 					directory: { type: "string" }
 				},
 				required: ["attachments", "directory"],
+				additionalProperties: false
+			}
+		},
+		preview: {
+			input: {
+				type: "object",
+				properties: {
+					sessionID: { type: "string" },
+					id: { type: "string" }
+				},
+				required: ["sessionID", "id"],
+				additionalProperties: false
+			},
+			output: {
+				type: "object",
+				properties: {
+					mime: { type: "string" },
+					base64: { type: "string" }
+				},
+				required: ["mime", "base64"],
 				additionalProperties: false
 			}
 		},
@@ -97,6 +118,15 @@ var Attachments = Rpc.define({
 				required: ["path", "status"],
 				additionalProperties: false
 			}
+		},
+		clear: {
+			input: {
+				type: "object",
+				properties: { sessionID: { type: "string" } },
+				required: ["sessionID"],
+				additionalProperties: false
+			},
+			output: { type: "null" }
 		}
 	},
 	events: { changed: { schema: {
@@ -131,6 +161,15 @@ function sizeLabel(bytes) {
 	if (bytes < 1048576) return `${Math.round(bytes / 1024)} KB`;
 	return `${(bytes / 1048576).toFixed(1)} MB`;
 }
+function createdAtLabel(value) {
+	if (!value) return "";
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return "";
+	return new Intl.DateTimeFormat(void 0, {
+		dateStyle: "medium",
+		timeStyle: "short"
+	}).format(date);
+}
 function message(error) {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -160,7 +199,7 @@ var tui_default = Plugin.define({
 				return;
 			}
 			try {
-				const answer = await client().list({ sessionID });
+				const answer = await client().list({ sessionID }, { location: context.location });
 				setRows(answer.attachments);
 				setDirectory(answer.directory);
 				setFailure(void 0);
@@ -175,7 +214,7 @@ var tui_default = Plugin.define({
 				directory: dirname(target),
 				name: basename(target),
 				overwrite
-			});
+			}, { location: context.location });
 			context.ui.toast.show({
 				title: "Attachment saved",
 				message: answer.path,
@@ -276,7 +315,7 @@ var tui_default = Plugin.define({
 										"   ",
 										statusLabel(row),
 										sizeLabel(row.bytes) ? ` · ${sizeLabel(row.bytes)}` : "",
-										row.path ? ` · ${row.path}` : ""
+										createdAtLabel(row.createdAt) ? ` · ${createdAtLabel(row.createdAt)}` : ""
 									]
 								})]
 							})
@@ -323,8 +362,11 @@ var tui_default = Plugin.define({
 						options: rows().map((row) => ({
 							title: `${row.order}. ${row.name}`,
 							value: row,
-							description: row.path,
-							footer: [statusLabel(row), sizeLabel(row.bytes)].filter(Boolean).join(" · ")
+							footer: [
+								statusLabel(row),
+								sizeLabel(row.bytes),
+								createdAtLabel(row.createdAt)
+							].filter(Boolean).join(" · ")
 						}))
 					});
 					if (picked) await saveAs(sessionID, picked);

@@ -11,6 +11,7 @@ export interface AttachmentInfo {
   readonly name: string
   readonly mime: string
   readonly bytes: number
+  readonly createdAt?: string
   readonly status: AttachmentStatus
   /** The file written last, when any. */
   readonly path?: string
@@ -26,6 +27,16 @@ export interface AttachmentList {
 
 export interface ListRequest {
   readonly sessionID: string
+}
+
+export interface PreviewRequest {
+  readonly sessionID: string
+  readonly id: string
+}
+
+export interface PreviewResult {
+  readonly mime: string
+  readonly base64: string
 }
 
 export interface SaveRequest {
@@ -51,6 +62,7 @@ const AttachmentSchema = {
     name: { type: "string" },
     mime: { type: "string" },
     bytes: { type: "integer" },
+    createdAt: { type: "string" },
     status: { type: "string", enum: ["new", "temp", "saved"] },
     path: { type: "string" },
     files: { type: "array", items: { type: "string" } },
@@ -83,6 +95,20 @@ export const Attachments = Rpc.define({
         additionalProperties: false,
       },
     },
+    preview: {
+      input: {
+        type: "object",
+        properties: { sessionID: { type: "string" }, id: { type: "string" } },
+        required: ["sessionID", "id"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: { mime: { type: "string" }, base64: { type: "string" } },
+        required: ["mime", "base64"],
+        additionalProperties: false,
+      },
+    },
     save: {
       input: {
         type: "object",
@@ -105,6 +131,15 @@ export const Attachments = Rpc.define({
         required: ["path", "status"],
         additionalProperties: false,
       },
+    },
+    clear: {
+      input: {
+        type: "object",
+        properties: { sessionID: { type: "string" } },
+        required: ["sessionID"],
+        additionalProperties: false,
+      },
+      output: { type: "null" },
     },
   },
   events: {

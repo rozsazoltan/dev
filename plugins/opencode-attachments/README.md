@@ -2,10 +2,10 @@
 
 OpenCode V2 plugin that lets the agent turn a chat attachment into a real file at a path and name **it chooses**, and only when it decides a file is needed — plus a TUI sidebar list and a desktop header button to browse the conversation's attachments and save any of them by hand.
 
-- Pasting a file into the chat never writes anything to disk.
-- The plugin keeps the attachment bytes in memory for the current session and exposes one tool, `attachment_to_file`.
+- Readable attachments are copied automatically to a private, host-local cache; unreadable `media:` references are skipped.
+- The plugin stores timestamp-only attachment metadata, never message text, and exposes one tool, `attachment_to_file`.
 - The tool writes the decoded bytes to any absolute or project-relative path, creating parent directories.
-- Without a `path`, the file goes to a per-session OpenCode temp directory: `<os tmpdir>/opencode/attachments/<sessionID>/`.
+- Without a `path`, the exported file goes to a per-session OpenCode temp directory.
 - Existing files are never replaced unless the call sets `overwrite: true`.
 - `@file` mentions that are already real files return their existing path instead of being copied.
 - Both UI halves list the attachments oldest first with their name, size, and whether they are still unwritten, temp, or saved, and where.
@@ -90,10 +90,9 @@ The package ships a GUI part as `./gui-experimental`, built from `src/gui.tsx` i
 
 ## Behavior and limits
 
-- Attachment bytes are captured in `ctx.session.hook("prompt", ...)` and held **in memory** for up to four sessions; nothing is decoded or written until the tool runs or a UI half saves one.
-- The attachment history (names, order, written paths, status) is **memory only**: it disappears when the server process restarts, and a restart drops the bytes too. A file already written stays on disk and can be found there, but it is no longer listed.
-- Only inline `data:` URLs can be written. Stored `media:` references are not readable from the plugin context and produce a clear error.
-- Attachments above 25 MiB are rejected rather than written.
+- Readable attachment bytes and timestamp-only metadata are stored in a private host-local cache. Original `file:` sources and user exports are never deleted.
+- Plugin-owned copies expire best-effort after seven days, and chat deletion removes only plugin-owned copies. Cleanup runs while OpenCode runs or accesses attachments; it cannot run while OpenCode is stopped.
+- Unreadable `media:` references are skipped. Attachments above 25 MiB are not copied.
 - A tool call in a **subagent** session does not see attachments from the parent session, because each session keeps its own list.
 - File names are reduced to their last segment and stripped of path separators and characters that are invalid on Windows, so a crafted attachment name cannot escape the target directory.
 - The plugin has no options.

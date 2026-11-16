@@ -32,6 +32,13 @@ function sizeLabel(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function createdAtLabel(value?: string): string {
+  if (!value) return ""
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return ""
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date)
+}
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -59,7 +66,7 @@ export default Plugin.define({
         return
       }
       try {
-        const answer = (await client().list({ sessionID })) as AttachmentList
+        const answer = (await client().list({ sessionID }, { location: context.location })) as AttachmentList
         setRows(answer.attachments)
         setDirectory(answer.directory)
         setFailure(undefined)
@@ -69,13 +76,16 @@ export default Plugin.define({
     }
 
     async function write(sessionID: string, attachment: AttachmentInfo, target: string, overwrite: boolean): Promise<void> {
-      const answer = (await client().save({
-        sessionID,
-        id: attachment.id,
-        directory: dirname(target),
-        name: basename(target),
-        overwrite,
-      })) as SaveResult
+      const answer = (await client().save(
+        {
+          sessionID,
+          id: attachment.id,
+          directory: dirname(target),
+          name: basename(target),
+          overwrite,
+        },
+        { location: context.location },
+      )) as SaveResult
       context.ui.toast.show({ title: "Attachment saved", message: answer.path, variant: "success" })
       await load(sessionID)
     }
@@ -152,7 +162,7 @@ export default Plugin.define({
                     {"   "}
                     {statusLabel(row)}
                     {sizeLabel(row.bytes) ? ` · ${sizeLabel(row.bytes)}` : ""}
-                    {row.path ? ` · ${row.path}` : ""}
+                    {createdAtLabel(row.createdAt) ? ` · ${createdAtLabel(row.createdAt)}` : ""}
                   </text>
                 </box>
               )}
@@ -194,8 +204,7 @@ export default Plugin.define({
               options: rows().map((row) => ({
                 title: `${row.order}. ${row.name}`,
                 value: row,
-                description: row.path,
-                footer: [statusLabel(row), sizeLabel(row.bytes)].filter(Boolean).join(" · "),
+                footer: [statusLabel(row), sizeLabel(row.bytes), createdAtLabel(row.createdAt)].filter(Boolean).join(" · "),
               })),
             })
             if (picked) await saveAs(sessionID, picked)
