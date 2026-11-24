@@ -1,6 +1,7 @@
 import { lstat, readFile, readdir, realpath } from "node:fs/promises"
 import { homedir } from "node:os"
-import { basename, extname, isAbsolute, join, resolve } from "node:path"
+import { basename, extname, isAbsolute, join, relative, resolve } from "node:path"
+import { normalizeInstructionPath } from "./toggles.ts"
 
 export type MissingPolicy = "warn" | "ignore" | "error"
 
@@ -26,6 +27,12 @@ const MAX_TOTAL_LIMIT = 4 * 1024 * 1024
 const MAX_SOURCES = 64
 const MAX_DIRECTORY_FILES = 128
 export const INSTRUCTION_MARKER = "<!-- opencode-instructions:v1 -->"
+
+export interface InstructionCandidate {
+  path: string
+  label: string
+  exists: boolean
+}
 
 function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, name: string): number {
   if (value === undefined) return fallback
@@ -101,7 +108,62 @@ function errorCode(error: unknown): string | undefined {
 }
 
 /** Collect only explicit Markdown sources. Directory scans are shallow and alphabetical. */
-export async function mergeInstructions(config: MergeConfig, projectRoot: string): Promise<MergeResult> {
+export async function collectInstructionCandidates(config: MergeConfig, projectRoot: string): Promise<InstructionCandidate[]> {
+  const candidates: InstructionCandidate[] = []
+  const visited = new Set<string>()
+  const excluded = new Set((config.exclude ?? []).map((filename) => filename.toLowerCase()))
+  const add = async (path: string, label: string): Promise<void> => {
+    if (extname(path).toLowerCase() !== ".md") return
+    try {
+      const metadata = await lstat(path)
+      if (metadata.isSymbolicLink() || !metadata.isFile()) return
+      const canonical = await realpath(path)
+      const key = normalizeInstructionPath(canonical)
+      if (visited.has(key)) return
+      visited.add(key)
+      candidates.push({ path: canonical, label, exists: true })
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") {
+        candidates.push({ path: resolve(path), label, exists: false })
+      } else if (config.onMissing === "error") throw error
+    }
+  }
+
+  for (const input of config.sources) {
+    const path = resolveSourcePath(input, projectRoot)
+    let metadata
+    try {
+      metadata = await lstat(path)
+    } catch (error) {
+      if (errorCode(error) === "ENOENT" && extname(path).toLowerCase() === ".md") {
+        await add(path, basename(path))
+      } else if (config.onMissing === "error") throw error
+      continue
+    }
+    if (metadata.isSymbolicLink()) continue
+    if (metadata.isFile()) {
+      await add(path, basename(path))
+      continue
+    }
+    if (!metadata.isDirectory()) continue
+    let entries
+    try {
+      entries = (await readdir(path, { withFileTypes: true }))
+        .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".md") && !excluded.has(entry.name.toLowerCase()))
+        .sort((a, b) => a.name.localeCompare(b.name, "en"))
+    } catch {
+      continue
+    }
+    if (entries.length > MAX_DIRECTORY_FILES) continue
+    for (const entry of entries) {
+      const file = join(path, entry.name)
+      await add(file, relative(path, file).replace(/\\/g, "/"))
+    }
+  }
+  return candidates
+}
+
+export async function mergeInstructions(config: MergeConfig, projectRoot: string, disabled: ReadonlySet<string> = new Set()): Promise<MergeResult> {
   const warnings: string[] = []
   const files: string[] = []
   const blocks: string[] = []
@@ -126,9 +188,10 @@ export async function mergeInstructions(config: MergeConfig, projectRoot: string
         return
       }
       const canonical = await realpath(path)
-      const key = process.platform === "win32" ? canonical.toLowerCase() : canonical
+      const key = normalizeInstructionPath(canonical)
       if (visited.has(key)) return
       visited.add(key)
+      if (disabled.has(key)) return
       if (metadata.size > config.maxFileBytes) {
         report(`Markdown source exceeds maxFileBytes: ${path}`)
         return
