@@ -5,15 +5,16 @@ import { Instructions } from "./rpc.ts"
 type File = { path: string; label: string; exists: boolean; enabled: boolean }
 
 const CSS = `
-.oci-trigger { border: 0; background: transparent; color: var(--text-base); cursor: pointer; font: inherit; padding: 4px 8px; border-radius: 6px; }
+.oci-trigger { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px;
+  border: 1px solid var(--border-weak); border-radius: 6px; background: transparent; color: var(--text-base);
+  font: inherit; font-size: 12px; cursor: pointer; }
 .oci-trigger:hover { background: var(--surface-hover); }
-.oci-trigger:focus-visible, .oci-switch:focus-visible, .oci-close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.oci-trigger:focus-visible, .oci-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .oci-dialog { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .oci-intro, .oci-muted { color: var(--text-muted); font-size: 12px; }
 .oci-list { max-height: min(60vh, 560px); overflow: auto; }
-.oci-file { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border-weak); }
+.oci-file { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border-weak); }
 .oci-label { font-weight: 500; overflow-wrap: anywhere; }
-.oci-path { color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; margin-top: 3px; }
 .oci-switch { border: 1px solid var(--border-weak); border-radius: 999px; min-width: 72px; padding: 6px 10px; color: var(--text-base); background: var(--surface-base); cursor: pointer; }
 .oci-switch[aria-checked="true"] { color: var(--text-strong); }
 .oci-error { color: var(--text-danger); overflow-wrap: anywhere; font-size: 12px; }
@@ -27,6 +28,11 @@ function message(error: unknown): string {
     return `${type}${error.message}`
   }
   return String(error)
+}
+
+function isUnavailable(error: unknown): boolean {
+  return (typeof error === "object" && error !== null && "type" in error && error.type === "rpc.unavailable")
+    || message(error).includes("RPC is unavailable")
 }
 
 export default Plugin.define({
@@ -65,10 +71,21 @@ export default Plugin.define({
       setLoading(true)
       setFailure("")
       try {
-        const result = await captured.server.client.rpc(Instructions).list({}, { location: captured.location }) as { files: File[] }
-        if (id !== request || !matches(current(), captured)) return
-        setFiles(result.files)
-        setLoaded(captured)
+        const delays = [250, 500, 1000, 2000, 2000]
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const result = await captured.server.client.rpc(Instructions).list({}, { location: captured.location }) as { files: File[] }
+            if (id !== request || !matches(current(), captured)) return
+            setFiles(result.files)
+            setLoaded(captured)
+            break
+          } catch (error) {
+            if (id !== request || !matches(current(), captured)) return
+            if (!isUnavailable(error) || attempt >= delays.length) throw error
+            await new Promise((resolve) => setTimeout(resolve, delays[attempt]))
+            if (id !== request || !matches(current(), captured)) return
+          }
+        }
       } catch (error) {
         if (id === request && matches(current(), captured)) setFailure(message(error))
       } finally {
@@ -129,7 +146,6 @@ export default Plugin.define({
                 <div class="oci-file">
                   <div>
                     <div class="oci-label">{file.label}{!file.exists && <span class="oci-muted"> · missing</span>}</div>
-                    <div class="oci-path">{file.path}</div>
                   </div>
                   <button
                     class="oci-switch"
@@ -153,7 +169,7 @@ export default Plugin.define({
       at: "session.header",
       order: 11,
       render: (_input: SlotMap["session.header"]) => (
-        <button class="oci-trigger" type="button" onClick={open}>Instructions</button>
+        <button class="oci-trigger" type="button" aria-label="Instructions" onClick={open}>Instructions</button>
       ),
     })
   },
