@@ -20,7 +20,13 @@ const CSS = `
 `
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  if (error instanceof Error) return error.message
+  // RPC failures reject with plain { type, message } objects, not Error instances.
+  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+    const type = "type" in error && typeof error.type === "string" ? `${error.type}: ` : ""
+    return `${type}${error.message}`
+  }
+  return String(error)
 }
 
 export default Plugin.define({
