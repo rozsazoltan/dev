@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin"
-import { collectInstructionCandidates, INSTRUCTION_MARKER, mergeInstructions, parseOptions } from "./merge.ts"
+import { collectInstructionCandidates, INSTRUCTION_MARKER, mergeInstructions, parseOptions, readInstructionSource } from "./merge.ts"
 import { Instructions } from "./rpc.ts"
 import { normalizeInstructionPath, readDisabled, writeDisabled } from "./toggles.ts"
 
@@ -24,6 +24,18 @@ export default Plugin.define({
             enabled: !disabled.has(normalizeInstructionPath(file.path)),
           })),
         }
+      },
+      read: async (input: unknown) => {
+        if (typeof input !== "object" || input === null || !("path" in input) || typeof input.path !== "string") {
+          throw new Error("Invalid instruction read request")
+        }
+        const { path } = input
+        const candidates = await collectInstructionCandidates(config, projectRoot)
+        const key = normalizeInstructionPath(path)
+        const candidate = candidates.find((file) => normalizeInstructionPath(file.path) === key)
+        if (!candidate) throw new Error(`Unknown instruction path: ${path}`)
+        if (!candidate.exists) throw new Error(`Missing instruction file: ${candidate.label}`)
+        return { content: await readInstructionSource(candidate.path, config.maxFileBytes) }
       },
       set: async (input: unknown) => {
         if (typeof input !== "object" || input === null || !("path" in input) || typeof input.path !== "string" || !("enabled" in input) || typeof input.enabled !== "boolean") {

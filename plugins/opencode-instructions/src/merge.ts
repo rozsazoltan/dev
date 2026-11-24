@@ -111,6 +111,17 @@ function errorCode(error: unknown): string | undefined {
   return undefined
 }
 
+/** Read one configured Markdown source for preview, with the same safety as injection. */
+export async function readInstructionSource(path: string, maxBytes: number): Promise<string> {
+  const metadata = await lstat(path)
+  if (metadata.isSymbolicLink() || !metadata.isFile()) throw new Error("Not a regular file")
+  if (metadata.size > maxBytes) throw new Error("File exceeds the configured size limit")
+  const buffer = await readFile(path)
+  if (buffer.byteLength > maxBytes) throw new Error("File exceeds the configured size limit")
+  if (buffer.includes(0)) throw new Error("Not a text file")
+  return new TextDecoder("utf-8", { fatal: true }).decode(buffer).replace(/^﻿/, "")
+}
+
 /** Collect only explicit Markdown sources. Directory scans are shallow and alphabetical. */
 export async function collectInstructionCandidates(config: MergeConfig, projectRoot: string): Promise<InstructionCandidate[]> {
   const candidates: InstructionCandidate[] = []

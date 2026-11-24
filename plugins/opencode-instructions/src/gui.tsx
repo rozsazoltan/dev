@@ -9,14 +9,14 @@ const CSS = `
   border: 1px solid var(--border-weak); border-radius: 6px; background: transparent; color: var(--text-base);
   font: inherit; font-size: 12px; cursor: pointer; }
 .oci-trigger:hover { background: var(--surface-hover); }
-.oci-trigger:focus-visible, .oci-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.oci-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .oci-dialog { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .oci-intro, .oci-muted { color: var(--text-muted); font-size: 12px; }
 .oci-list { max-height: min(60vh, 560px); overflow: auto; }
 .oci-file { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border-weak); }
 .oci-label { font-weight: 500; overflow-wrap: anywhere; }
-.oci-switch { border: 1px solid var(--border-weak); border-radius: 999px; min-width: 72px; padding: 6px 10px; color: var(--text-base); background: var(--surface-base); cursor: pointer; }
-.oci-switch[aria-checked="true"] { color: var(--text-strong); }
+.oci-actions { display: flex; align-items: center; gap: 8px; }
+.oci-preview { max-height: min(70vh, 620px); overflow: auto; }
 .oci-error { color: var(--text-danger); overflow-wrap: anywhere; font-size: 12px; }
 `
 
@@ -42,6 +42,8 @@ export default Plugin.define({
     const [failure, setFailure] = createSignal("")
     const [busy, setBusy] = createSignal<string>()
     const [loaded, setLoaded] = createSignal<Context>()
+    const [viewing, setViewing] = createSignal<{ file: File; content?: string }>()
+    const [readError, setReadError] = createSignal("")
     let request = 0
     let writeRequest = 0
 
@@ -99,6 +101,7 @@ export default Plugin.define({
       setFiles([])
       setLoaded(undefined)
       setBusy(undefined)
+      setViewing(undefined)
       setLoading(!!captured)
       setFailure("")
       void load(captured)
@@ -109,7 +112,7 @@ export default Plugin.define({
       onCleanup(stop)
     })
 
-    async function toggle(file: File) {
+    async function toggle(file: File, enabled: boolean) {
       const captured = current()
       if (!captured || !matches(loaded(), captured) || loading() || failure() || busy()) return
       const writeID = ++writeRequest
@@ -117,7 +120,7 @@ export default Plugin.define({
       setFailure("")
       try {
         const result = await captured.server.client.rpc(Instructions).set(
-          { path: file.path, enabled: !file.enabled },
+          { path: file.path, enabled },
           { location: captured.location },
         ) as { ok: boolean }
         if (!matches(current(), captured)) return
@@ -130,36 +133,75 @@ export default Plugin.define({
       }
     }
 
+    async function show(file: File) {
+      const captured = current()
+      if (!captured || !matches(loaded(), captured)) return
+      setReadError("")
+      setFailure("")
+      setViewing({ file })
+      try {
+        const result = await captured.server.client.rpc(Instructions).read({ path: file.path }, { location: captured.location }) as { content: string }
+        if (!matches(current(), captured)) return
+        setViewing({ file, content: result.content })
+      } catch (error) {
+        if (!matches(current(), captured)) return
+        setReadError(message(error))
+      }
+    }
+
     function open() {
       void load()
       ctx.dialogs.open((dialog) => (
-        <ctx.ui.Dialog title="Instruction files" size="large" footer={<ctx.ui.Button size="small" onClick={dialog.close}>Close</ctx.ui.Button>}>
-          <div class="oci-dialog">
-            <p class="oci-intro">Choose which configured Markdown files guide this project.</p>
-            <Show when={failure()}><div class="oci-error" role="alert">{failure()}</div></Show>
-            <Show when={loading()}><div class="oci-muted" role="status">Loading instruction files…</div></Show>
-            <Show when={!loading() && !failure() && files().length === 0}>
-              <div class="oci-muted">No configured instruction files found.</div>
+        <ctx.ui.Dialog
+          title={viewing() ? viewing()!.file.label : "Instruction files"}
+          size="large"
+          footer={
+            <Show when={viewing()} fallback={<ctx.ui.Button size="small" onClick={dialog.close}>Close</ctx.ui.Button>}>
+              <ctx.ui.Button variant="ghost" size="small" onClick={() => { setViewing(undefined); setReadError("") }}>Back</ctx.ui.Button>
+              <ctx.ui.Button size="small" onClick={dialog.close}>Close</ctx.ui.Button>
             </Show>
-            <div class="oci-list">
-              <For each={files()}>{(file) =>
-                <div class="oci-file">
-                  <div>
+          }
+        >
+          <Show when={viewing()} fallback={
+            <div class="oci-dialog">
+              <p class="oci-intro">Choose which configured Markdown files guide this project.</p>
+              <Show when={failure()}><div class="oci-error" role="alert">{failure()}</div></Show>
+              <Show when={loading()}><div class="oci-muted" role="status">Loading instruction files…</div></Show>
+              <Show when={!loading() && !failure() && files().length === 0}>
+                <div class="oci-muted">No configured instruction files found.</div>
+              </Show>
+              <div class="oci-list">
+                <For each={files()}>{(file) =>
+                  <div class="oci-file">
                     <div class="oci-label">{file.label}{!file.exists && <span class="oci-muted"> · missing</span>}</div>
+                    <div class="oci-actions">
+                      <ctx.ui.Button
+                        variant="ghost"
+                        size="small"
+                        disabled={!file.exists || loading() || !!failure() || !matches(loaded(), current())}
+                        onClick={() => void show(file)}
+                      >Show</ctx.ui.Button>
+                      <ctx.ui.Switch
+                        label={file.label}
+                        hideLabel
+                        checked={file.enabled}
+                        disabled={!!busy() || loading() || !!failure() || !matches(loaded(), current())}
+                        onChange={(enabled) => void toggle(file, enabled)}
+                      />
+                    </div>
                   </div>
-                  <button
-                    class="oci-switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={file.enabled}
-                    aria-label={`${file.enabled ? "Disable" : "Enable"} ${file.label}`}
-                    disabled={!!busy() || loading() || !!failure() || !matches(loaded(), current())}
-                    onClick={() => void toggle(file)}
-                  >{busy() === file.path ? "Saving…" : file.enabled ? "On" : "Off"}</button>
-                </div>
-              }</For>
+                }</For>
+              </div>
             </div>
-          </div>
+          }>
+            <div class="oci-dialog">
+              <Show when={readError()}><div class="oci-error" role="alert">{readError()}</div></Show>
+              <Show when={viewing()?.content === undefined && !readError()}><div class="oci-muted" role="status">Loading…</div></Show>
+              <Show when={viewing()?.content !== undefined}>
+                <div class="oci-preview"><ctx.ui.Markdown text={viewing()!.content!} /></div>
+              </Show>
+            </div>
+          </Show>
         </ctx.ui.Dialog>
       ))
     }

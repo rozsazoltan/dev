@@ -27,6 +27,20 @@ export const Instructions = Rpc.define({
         additionalProperties: false,
       },
     },
+    read: {
+      input: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+        additionalProperties: false,
+      } as const,
+      output: {
+        type: "object",
+        properties: { content: { type: "string" } },
+        required: ["content"],
+        additionalProperties: false,
+      },
+    },
     set: {
       input: {
         type: "object",
