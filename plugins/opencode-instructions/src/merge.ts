@@ -1,6 +1,7 @@
 import { lstat, readFile, readdir, realpath } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, extname, isAbsolute, join, relative, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { normalizeInstructionPath } from "./toggles.ts"
 
 export type MissingPolicy = "warn" | "ignore" | "error"
@@ -43,10 +44,13 @@ function boundedPositiveInteger(value: unknown, fallback: number, maximum: numbe
 }
 
 export function parseOptions(raw: Record<string, unknown>): MergeConfig {
-  if (!Array.isArray(raw.sources) || raw.sources.length === 0 || raw.sources.length > MAX_SOURCES) {
+  const rawSources = raw.sources === undefined
+    ? [fileURLToPath(new URL("../examples/instructions/", import.meta.url))]
+    : raw.sources
+  if (!Array.isArray(rawSources) || rawSources.length === 0 || rawSources.length > MAX_SOURCES) {
     throw new Error(`options.sources must contain 1–${MAX_SOURCES} explicit file or directory paths`)
   }
-  const sources = raw.sources.map((source, index) => {
+  const sources = rawSources.map((source, index) => {
     if (typeof source !== "string" || source.trim() === "") {
       throw new Error(`options.sources[${index}] must be a nonempty path string`)
     }

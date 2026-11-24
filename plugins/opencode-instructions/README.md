@@ -8,7 +8,7 @@ OpenCode V2 server plugin that reads explicit Markdown files and directories and
 - Deduplicates repeated files, skips symbolic links and non-Markdown files.
 - Enforces per-file and total size limits.
 - Does not rewrite user messages or persist merged instructions to disk.
-- Does not read files other than configured sources and immediate Markdown children of configured directories.
+- Reads only configured sources and their immediate Markdown children, or the bundled instruction directory when `sources` is omitted.
 
 ## Per-file toggles
 
@@ -28,7 +28,9 @@ opencode plugin add 'github:rozsazoltan/dev#master::path:plugins/opencode-instru
 
 The package is separate from APM's `plugin.json` bundles. **Do not assume `apm install` will install an executable OpenCode V2 server plugin.**
 
-Use the *object form* in global `~/.config/opencode/opencode.jsonc` to pass options. Add this entry to the existing `plugins` array; preserve existing entries:
+No options are required. A plain-string entry uses all seven Markdown files bundled in `examples/instructions/`, including the browser, recovery, completion, communication, and Git/planning rules. Use the **Instructions** dialog to disable individual files. The bundled directory resolves from the installed plugin, not your project or working directory.
+
+Use the *object form* in global `~/.config/opencode/opencode.jsonc` to override sources or other options. Explicit `sources` replace the bundled defaults; they are not added to them. Add this entry to the existing `plugins` array; preserve existing entries:
 
 ```jsonc
 {
@@ -81,7 +83,7 @@ WSL example path: `/github/rozsazoltan/dev/plugins/opencode-instructions`.
 
 | Option | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `sources` | `string[]` | required | Explicit `.md` files or directories; directories contribute their immediate `.md` children. |
+| `sources` | `string[]` | Bundled `examples/instructions/` | Explicit `.md` files or directories override bundled instructions; directories contribute their immediate `.md` children. |
 | `exclude` | `string[]` | `[]` | Exact `.md` basenames to skip in configured directories; case-insensitive, no globs. |
 | `includeCompaction` | `boolean` | `false` | Also inject same instructions into compaction requests. |
 | `onMissing` | `"warn" \| "ignore" \| "error"` | `"warn"` | Missing or skipped source behavior. |
@@ -94,13 +96,13 @@ One joined system text part is appended through `ctx.session.hook("context", ...
 
 ## Migrating your current AGENTS.md
 
-Copy only the starter files you want from `examples/instructions/` into your configured source directory:
+To customize the bundled instructions, copy the files you want from `examples/instructions/` into your own source directory:
 
 - `browser-research.md`: browser-based research, authenticated sessions, and human challenge handoff.
 - `context-recovery.md`: planning files, durable task state, and recovery after compaction.
 - `completion-verification.md`: evidence-based completion checks.
 
-These examples are not injected automatically. Configure their directory as a source, or add their individual paths to `sources`, before using their GUI switches.
+These files load automatically when `sources` is omitted. When you configure custom sources, include their copied paths or directory if you want to keep them enabled.
 
 1. Copy desired text into separate Markdown files under `~/.config/opencode/instructions/` (starter content included in `examples/instructions/`).
 2. Keep current global `AGENTS.md` until plugin loads and instructions work in an OpenCode session.
@@ -130,7 +132,7 @@ Local checks do not verify remote Git-subdirectory loading or live OpenCode Desk
 
 ## Troubleshooting
 
-- No instructions loaded: confirm `options.sources` points to existing files in *the OpenCode server process's filesystem* (important for WSL and remote servers).
+- No instructions loaded: check the **Instructions** switches. If you set `options.sources`, confirm those paths exist in *the OpenCode server process's filesystem* (important for WSL and remote servers); omit `sources` to use bundled instructions.
 - Duplicate instructions: remove matching content from legacy global `AGENTS.md` or built-in `instructions` entries.
 - On Windows, use `D:/github/...` absolute plugin paths for local installs; use `/github/...` or `/mnt/d/...` as appropriate within WSL.
 - Missing files produce warnings by default; use `onMissing: "error"` when every source is mandatory.
