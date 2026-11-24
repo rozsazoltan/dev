@@ -8,7 +8,15 @@ OpenCode V2 server plugin that reads explicit Markdown files and directories and
 - Deduplicates repeated files, skips symbolic links and non-Markdown files.
 - Enforces per-file and total size limits.
 - Does not rewrite user messages or persist merged instructions to disk.
-- Does not read files other than configured sources and immediate Markdown children of configured directories.
+- Reads only configured sources and their immediate Markdown children, or the bundled instruction directory when `sources` is omitted.
+
+## Per-file toggles
+
+In an OpenCode Desktop session, click **Instructions** in the session header. The dialog lists configured Markdown files, their paths, and missing-file status. Switch a file **On** or **Off**; changes apply to subsequent model requests, including compaction when `includeCompaction` is enabled.
+
+Files default to enabled. Disabled paths persist in server-side plugin storage under `instruction-toggles`; changing a switch does not edit the source file or `AGENTS.md`. The dialog uses the active session's server and project location, including WSL and remote servers. It does not browse your desktop's filesystem.
+
+The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns configured files and their enabled state; `set({ path, enabled })` updates a configured file; `changed` notifies open dialogs to refresh.
 
 ## Install from shared monorepo
 
@@ -20,7 +28,9 @@ opencode plugin add 'github:rozsazoltan/dev#master::path:plugins/opencode-instru
 
 The package is separate from APM's `plugin.json` bundles. **Do not assume `apm install` will install an executable OpenCode V2 server plugin.**
 
-Use the *object form* in global `~/.config/opencode/opencode.jsonc` to pass options. Add this entry to the existing `plugins` array; preserve existing entries:
+No options are required. A plain-string entry uses all seven Markdown files bundled in `examples/instructions/`, including the browser, recovery, completion, communication, and Git/planning rules. Use the **Instructions** dialog to disable individual files. The bundled directory resolves from the installed plugin, not your project or working directory.
+
+Use the *object form* in global `~/.config/opencode/opencode.jsonc` to override sources or other options. Explicit `sources` replace the bundled defaults; they are not added to them. Add this entry to the existing `plugins` array; preserve existing entries:
 
 ```jsonc
 {
@@ -73,7 +83,7 @@ WSL example path: `/github/rozsazoltan/dev/plugins/opencode-instructions`.
 
 | Option | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `sources` | `string[]` | required | Explicit `.md` files or directories; directories contribute their immediate `.md` children. |
+| `sources` | `string[]` | Bundled `examples/instructions/` | Explicit `.md` files or directories override bundled instructions; directories contribute their immediate `.md` children. |
 | `exclude` | `string[]` | `[]` | Exact `.md` basenames to skip in configured directories; case-insensitive, no globs. |
 | `includeCompaction` | `boolean` | `false` | Also inject same instructions into compaction requests. |
 | `onMissing` | `"warn" \| "ignore" \| "error"` | `"warn"` | Missing or skipped source behavior. |
@@ -85,6 +95,14 @@ Exclusions apply only to immediate files found inside configured directories. Ex
 One joined system text part is appended through `ctx.session.hook("context", ...)`, and optionally `ctx.session.hook("compaction", ...)`. Other system parts are not modified. Plugin does **not** affect titles or auxiliary generation requests. OpenCode native `AGENTS.md`, project instructions, policies and higher-priority system rules still apply.
 
 ## Migrating your current AGENTS.md
+
+To customize the bundled instructions, copy the files you want from `examples/instructions/` into your own source directory:
+
+- `browser-research.md`: browser-based research, authenticated sessions, and human challenge handoff.
+- `context-recovery.md`: planning files, durable task state, and recovery after compaction.
+- `completion-verification.md`: evidence-based completion checks.
+
+These files load automatically when `sources` is omitted. When you configure custom sources, include their copied paths or directory if you want to keep them enabled.
 
 1. Copy desired text into separate Markdown files under `~/.config/opencode/instructions/` (starter content included in `examples/instructions/`).
 2. Keep current global `AGENTS.md` until plugin loads and instructions work in an OpenCode session.
@@ -100,16 +118,21 @@ cd plugins/opencode-instructions
 npm install
 npm test
 npm run typecheck
+npm run build:gui
 opencode plugin list
 ```
 
 Unit tests run under Node.js 22+. Runtime needs the OpenCode version whose API exposes `@opencode/plugin` and `ctx.session.hook("context", ...)` (OpenCode V2).
 
-**Validation status:** On Node.js 26.12.1 and npm 11.20.0, `npm install --ignore-scripts`, all seven unit tests, TypeScript typecheck, and a local plugin-module import passed. Remote Git subdirectory loading and live OpenCode integration remain unverified.
+The GUI export loads `dist/gui-experimental.cjs`; rebuild it after changing GUI source. The generated bundle is included in the package so installation does not require a GUI build.
+
+Keep the script named `build:gui`: a generic `build` script triggers npm Git dependency preparation, which can fail when npm is launched through a compiled OpenCode executable.
+
+Local checks do not verify remote Git-subdirectory loading or live OpenCode Desktop interaction.
 
 ## Troubleshooting
 
-- No instructions loaded: confirm `options.sources` points to existing files in *the OpenCode server process's filesystem* (important for WSL and remote servers).
+- No instructions loaded: check the **Instructions** switches. If you set `options.sources`, confirm those paths exist in *the OpenCode server process's filesystem* (important for WSL and remote servers); omit `sources` to use bundled instructions.
 - Duplicate instructions: remove matching content from legacy global `AGENTS.md` or built-in `instructions` entries.
 - On Windows, use `D:/github/...` absolute plugin paths for local installs; use `/github/...` or `/mnt/d/...` as appropriate within WSL.
 - Missing files produce warnings by default; use `onMissing: "error"` when every source is mandatory.
