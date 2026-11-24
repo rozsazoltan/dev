@@ -116,13 +116,15 @@ cd plugins/opencode-instructions
 npm install
 npm test
 npm run typecheck
-npm run build
+npm run build:gui
 opencode plugin list
 ```
 
 Unit tests run under Node.js 22+. Runtime needs the OpenCode version whose API exposes `@opencode/plugin` and `ctx.session.hook("context", ...)` (OpenCode V2).
 
 The GUI export loads `dist/gui-experimental.cjs`; rebuild it after changing GUI source. The generated bundle is included in the package so installation does not require a GUI build.
+
+Keep the script named `build:gui`: a generic `build` script triggers npm Git dependency preparation, which can fail when npm is launched through a compiled OpenCode executable.
 
 Local checks do not verify remote Git-subdirectory loading or live OpenCode Desktop interaction.
 
