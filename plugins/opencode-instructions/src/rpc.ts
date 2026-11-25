@@ -71,6 +71,20 @@ export const Instructions = Rpc.define({
         additionalProperties: false,
       },
     },
+    create: {
+      input: {
+        type: "object",
+        properties: { scope: { type: "string" }, name: { type: "string" } },
+        required: ["scope", "name"],
+        additionalProperties: false,
+      } as const,
+      output: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
   },
   events: {
     changed: {

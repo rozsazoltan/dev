@@ -18,7 +18,16 @@ const CSS = `
 .oci-trigger:hover { background: var(--surface-hover); }
 .oci-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .oci-dialog { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.oci-list { max-height: min(60vh, 560px); overflow: auto; }
+.oci-list { display: flex; flex-direction: column; gap: 16px; max-height: min(60vh, 560px); overflow: auto; }
+.oci-section { display: flex; flex-direction: column; gap: 10px; }
+.oci-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border-weak); }
+.oci-section-title { margin: 0; font-size: 13px; font-weight: 600; }
+.oci-card { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--border-weak); border-radius: 8px; }
+.oci-card-text { display: flex; flex-direction: column; gap: 2px; }
+.oci-card-title { font-size: 12px; font-weight: 500; }
+.oci-empty { font-size: 12px; color: var(--text-muted); }
 .oci-actions { display: flex; align-items: center; gap: 4px; }
 .oci-label { font-weight: 500; overflow-wrap: anywhere; }
 .oci-preview { max-height: min(70vh, 620px); overflow: auto; }
@@ -55,8 +64,7 @@ export default Plugin.define({
     let writeRequest = 0
 
     const groups = createMemo(() =>
-      SCOPES.map((entry) => ({ ...entry, files: files().filter((file) => file.scope === entry.scope) }))
-        .filter((entry) => entry.scope === "builtin" || entry.files.length > 0),
+      SCOPES.map((entry) => ({ ...entry, files: files().filter((file) => file.scope === entry.scope) })),
     )
 
     type Session = NonNullable<ReturnType<typeof ctx.sessions.current>>
@@ -188,12 +196,39 @@ export default Plugin.define({
       }
     }
 
-    function edit(file: File) {
+    function edit(path: string) {
       const session = ctx.sessions.current()
       if (!session?.location) return
-      const opened = ctx.links.open({ href: file.path, exact: true, session })
-      if (opened) return
-      void ctx.desktop?.launch(file.path)
+      if (ctx.links.open({ href: path, exact: true, session })) return
+      void ctx.desktop?.launch(path)
+    }
+
+    async function create(scope: "project" | "global") {
+      const captured = current()
+      if (!captured || !matches(loaded(), captured)) return
+      const name = await ctx.dialogs.prompt({
+        title: "New instruction file",
+        description: scope === "global"
+          ? "Created in ~/.config/opencode/instructions and shared by every project."
+          : "Created in this project's .opencode/instructions directory.",
+        placeholder: "file-name",
+      })
+      if (name === undefined || !name.trim() || !matches(current(), captured)) return
+      setFailure("")
+      setBusy("create")
+      try {
+        const result = await captured.server.client.rpc(Instructions).create(
+          { scope, name },
+          { location: captured.location },
+        ) as { path: string }
+        if (!matches(current(), captured)) return
+        await load(captured)
+        edit(result.path)
+      } catch (error) {
+        if (matches(current(), captured)) setFailure(message(error))
+      } finally {
+        if (matches(current(), captured)) setBusy(undefined)
+      }
     }
 
     function open() {
@@ -214,18 +249,31 @@ export default Plugin.define({
             <div class="oci-dialog">
               <Show when={failure()}><div class="oci-error" role="alert">{failure()}</div></Show>
               <Show when={loading()}><div class="oci-note" role="status">Loading instruction files…</div></Show>
-              <Show when={!loading() && !failure() && files().length === 0}>
-                <div class="oci-note">No instruction files found.</div>
-              </Show>
-              <Show when={!loading() && files().length > 0}>
+              <Show when={!loading() && !failure()}>
                 <div class="oci-list">
                   <For each={groups()}>{(group) =>
-                    <ctx.ui.SettingsSection title={group.title} footer={<span class="oci-note">{group.description}</span>}>
+                    <section class="oci-section">
+                      <div class="oci-section-head">
+                        <h3 class="oci-section-title">{group.title}</h3>
+                        <Show when={group.scope !== "builtin"}>
+                          <ctx.ui.Tooltip value="New instruction file">
+                            <ctx.ui.IconButton
+                              icon="plus"
+                              label="New instruction file"
+                              size="small"
+                              disabled={!ready()}
+                              onClick={() => group.scope !== "builtin" && void create(group.scope)}
+                            />
+                          </ctx.ui.Tooltip>
+                        </Show>
+                      </div>
+                      <span class="oci-note">{group.description}</span>
                       <Show when={group.scope === "builtin"}>
-                        <ctx.ui.SettingsRow
-                          title="Use built-in instructions"
-                          description="Turn off to exclude every built-in file from the model context."
-                        >
+                        <div class="oci-card">
+                          <div class="oci-card-text">
+                            <span class="oci-card-title">Use built-in instructions</span>
+                            <span class="oci-note">Turn off to exclude every built-in file from the model context.</span>
+                          </div>
                           <ctx.ui.Switch
                             label="Use built-in instructions"
                             hideLabel
@@ -233,41 +281,45 @@ export default Plugin.define({
                             disabled={!ready()}
                             onChange={(enabled) => void toggleBuiltin(enabled)}
                           />
-                        </ctx.ui.SettingsRow>
+                        </div>
                       </Show>
-                      <For each={group.files}>{(file) =>
-                        <ctx.ui.SettingsRow
-                          title={<span class="oci-label">{file.label}{!file.exists && <span class="oci-note"> · missing</span>}</span>}
-                        >
-                          <div class="oci-actions">
-                            <ctx.ui.Button
-                              variant="ghost"
-                              size="small"
-                              disabled={!file.exists || !ready()}
-                              onClick={() => void show(file)}
-                            >Show</ctx.ui.Button>
-                            <Show when={file.scope !== "builtin"}>
-                              <ctx.ui.Tooltip value="Edit file">
-                                <ctx.ui.IconButton
-                                  icon="pencil-line"
-                                  label="Edit"
+                      <Show when={group.files.length > 0} fallback={<div class="oci-empty">No files in this section yet.</div>}>
+                        <ctx.ui.SettingsSection>
+                          <For each={group.files}>{(file) =>
+                            <ctx.ui.SettingsRow
+                              title={<span class="oci-label">{file.label}{!file.exists && <span class="oci-note"> · missing</span>}</span>}
+                            >
+                              <div class="oci-actions">
+                                <ctx.ui.Button
+                                  variant="ghost"
                                   size="small"
-                                  disabled={!file.exists}
-                                  onClick={() => edit(file)}
+                                  disabled={!file.exists || !ready()}
+                                  onClick={() => void show(file)}
+                                >Show</ctx.ui.Button>
+                                <Show when={file.scope !== "builtin"}>
+                                  <ctx.ui.Tooltip value="Edit file">
+                                    <ctx.ui.IconButton
+                                      icon="pencil-line"
+                                      label="Edit"
+                                      size="small"
+                                      disabled={!file.exists || !ready()}
+                                      onClick={() => edit(file.path)}
+                                    />
+                                  </ctx.ui.Tooltip>
+                                </Show>
+                                <ctx.ui.Switch
+                                  label={file.label}
+                                  hideLabel
+                                  checked={file.enabled}
+                                  disabled={!ready() || (file.scope === "builtin" && !builtin())}
+                                  onChange={(enabled) => void toggle(file, enabled)}
                                 />
-                              </ctx.ui.Tooltip>
-                            </Show>
-                            <ctx.ui.Switch
-                              label={file.label}
-                              hideLabel
-                              checked={file.enabled}
-                              disabled={!ready() || (file.scope === "builtin" && !builtin())}
-                              onChange={(enabled) => void toggle(file, enabled)}
-                            />
-                          </div>
-                        </ctx.ui.SettingsRow>
-                      }</For>
-                    </ctx.ui.SettingsSection>
+                              </div>
+                            </ctx.ui.SettingsRow>
+                          }</For>
+                        </ctx.ui.SettingsSection>
+                      </Show>
+                    </section>
                   }</For>
                 </div>
               </Show>

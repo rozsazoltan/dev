@@ -1,4 +1,4 @@
-import { lstat, readFile, readdir, realpath } from "node:fs/promises"
+import { lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, extname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -54,6 +54,26 @@ export function globalInstructionDirectory(home = homedir()): string {
 /** Project directories scanned in addition to configured sources. */
 export function projectInstructionDirectories(projectRoot: string): string[] {
   return [join(projectRoot, ".agents", "instructions"), join(projectRoot, ".opencode", "instructions")]
+}
+
+const CREATE_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,80}$/
+
+/** Creates one instruction file in the project or global directory and returns its absolute path. */
+export async function createInstructionFile(scope: "project" | "global", name: string, projectRoot: string): Promise<string> {
+  const trimmed = name.trim().replace(/\s+/g, " ")
+  const filename = trimmed.toLowerCase().endsWith(".md") ? trimmed : `${trimmed}.md`
+  const stem = filename.slice(0, -3).trim()
+  if (!CREATE_NAME.test(stem)) throw new Error("Use letters, numbers, spaces, dots, dashes or underscores, at most 80 characters.")
+  const directory = scope === "global" ? globalInstructionDirectory() : join(projectRoot, ".opencode", "instructions")
+  await mkdir(directory, { recursive: true })
+  const path = join(directory, filename)
+  try {
+    await writeFile(path, `# ${stem}\n`, { flag: "wx" })
+  } catch (error) {
+    if (errorCode(error) === "EEXIST") throw new Error(`Instruction file already exists: ${filename}`)
+    throw error
+  }
+  return path
 }
 
 function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, name: string): number {

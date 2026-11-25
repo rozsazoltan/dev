@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin"
-import { collectInstructionCandidates, INSTRUCTION_MARKER, mergeInstructions, parseOptions, readInstructionSource } from "./merge.ts"
+import { collectInstructionCandidates, createInstructionFile, INSTRUCTION_MARKER, mergeInstructions, parseOptions, readInstructionSource } from "./merge.ts"
 import { Instructions } from "./rpc.ts"
 import { normalizeInstructionPath, readToggles, writeToggles } from "./toggles.ts"
 
@@ -19,7 +19,8 @@ export default Plugin.define({
     const registration = await ctx.rpc.register(Instructions, {
       list: async () => {
         const toggles = await readToggles(storage)
-        const candidates = await collectInstructionCandidates({ ...config, includeBuiltin: config.includeBuiltin && toggles.builtin }, projectRoot)
+        // Every scope stays listed: a section turned off must stay visible so it can be turned back on.
+        const candidates = await collectInstructionCandidates(config, projectRoot)
         return {
           files: candidates.map((file) => ({
             path: file.path,
@@ -50,8 +51,7 @@ export default Plugin.define({
         }
         const { path, enabled } = input
         const operation = updates.then(async () => {
-          const toggles = await readToggles(storage)
-          const candidates = await collectInstructionCandidates({ ...config, includeBuiltin: config.includeBuiltin && toggles.builtin }, projectRoot)
+          const candidates = await collectInstructionCandidates(config, projectRoot)
           const key = normalizeInstructionPath(path)
           if (!candidates.some((file) => normalizeInstructionPath(file.path) === key)) {
             throw new Error(`Unknown instruction path: ${path}`)
@@ -81,6 +81,27 @@ export default Plugin.define({
         })
         updates = operation.then(() => undefined, () => undefined)
         return operation.then(() => ({ ok: true }))
+      },
+      create: async (input: unknown) => {
+        if (
+          typeof input !== "object" ||
+          input === null ||
+          !("scope" in input) ||
+          !("name" in input) ||
+          typeof input.scope !== "string" ||
+          typeof input.name !== "string"
+        ) {
+          throw new Error("Invalid instruction create request")
+        }
+        const { scope, name } = input
+        if (scope !== "project" && scope !== "global") throw new Error(`Unknown instruction scope: ${scope}`)
+        const operation = updates.then(async () => {
+          const path = await createInstructionFile(scope, name, projectRoot)
+          await registration.events.emit("changed", {})
+          return { path }
+        })
+        updates = operation.then(() => undefined, () => undefined)
+        return operation
       },
     })
 
