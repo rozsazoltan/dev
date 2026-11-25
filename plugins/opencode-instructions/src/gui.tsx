@@ -246,15 +246,17 @@ export default Plugin.define({
                               disabled={!file.exists || !ready()}
                               onClick={() => void show(file)}
                             >Show</ctx.ui.Button>
-                            <ctx.ui.Tooltip value="Edit file">
-                              <ctx.ui.IconButton
-                                icon="pencil-line"
-                                label="Edit"
-                                size="small"
-                                disabled={!file.exists}
-                                onClick={() => edit(file)}
-                              />
-                            </ctx.ui.Tooltip>
+                            <Show when={file.scope !== "builtin"}>
+                              <ctx.ui.Tooltip value="Edit file">
+                                <ctx.ui.IconButton
+                                  icon="pencil-line"
+                                  label="Edit"
+                                  size="small"
+                                  disabled={!file.exists}
+                                  onClick={() => edit(file)}
+                                />
+                              </ctx.ui.Tooltip>
+                            </Show>
                             <ctx.ui.Switch
                               label={file.label}
                               hideLabel

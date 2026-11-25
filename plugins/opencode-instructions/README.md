@@ -15,7 +15,7 @@ OpenCode V2 server plugin that reads explicit Markdown files and directories and
 
 In an OpenCode Desktop session, click **Instructions** in the session header. The dialog groups files into **Built-in**, **Project**, and **Global** sections. Switch a file **On** or **Off**; changes apply to subsequent model requests, including compaction when `includeCompaction` is enabled. The built-in section also has a master switch that excludes every built-in file at once; it is on by default.
 
-Each row has **Show** for a Markdown preview and a pencil button that opens the file in the app's file editor. A missing file stays listed so you can spot a misconfigured path.
+Each row has **Show** for a Markdown preview; project and global rows also have a pencil button that opens the file in the app's file editor. Built-in files ship with the plugin, so they have no pencil. A missing file stays listed so you can spot a misconfigured path.
 
 Files default to enabled. Disabled paths persist in server-side plugin storage under `instruction-toggles`; changing a switch does not edit the source file or `AGENTS.md`. The dialog uses the active session's server and project location, including WSL and remote servers. It does not browse your desktop's filesystem.
 
