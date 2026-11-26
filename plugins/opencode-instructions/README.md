@@ -23,6 +23,8 @@ Files default to enabled. Disabled paths persist in server-side plugin storage u
 
 The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns files with their scope, existence and enabled state, plus the built-in master flag; `set({ path, enabled })` updates one file; `setBuiltin({ enabled })` updates the master flag; `create({ scope, name })` creates one file and returns its path; `remove({ path })` deletes a project or global file; `open({ path })` hands a file to the server's operating system default editor, or returns the Windows `\\wsl$\` path for the desktop app to open when the server runs in WSL without interop; `changed` notifies open dialogs to refresh.
 
+The plugin also registers the `/instructions` command. It asks the model to print the injected block verbatim in one fenced code block, from the `# Combined user instructions` heading through every `### Source N:` heading, followed by a `Sources:` line, so you can check what actually reached the context. A model can shorten that listing; the server-side merge is the exact source.
+
 ## Install from shared monorepo
 
 After this package is committed to `rozsazoltan/dev/plugins/opencode-instructions`, add its package through the OpenCode V2 plugin manager:

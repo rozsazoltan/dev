@@ -158,6 +158,25 @@ export default Plugin.define({
       event.system.push({ type: "text", text: merged.text })
     }
 
+    const dumpRequest = [
+      "Print the instruction block this session received, verbatim, inside one fenced code block.",
+      "",
+      "- Start at the `# Combined user instructions` heading and keep every `### Source N: <filename>` heading under it.",
+      "- Do not summarize, reorder, shorten or reformat. Keep the original wording and the blank lines.",
+      "- If no such block exists, answer `No injected instruction block found` and nothing else.",
+      "- After the code block, add one line: `Sources: <comma-separated filenames>`, or `Sources: none`.",
+    ].join("\n")
+
+    await ctx.command.transform((editor) => {
+      editor.add({
+        name: "instructions",
+        description: "Print the instruction files injected into this session",
+        execute: async ({ sessionID }) => {
+          await ctx.session.prompt({ sessionID, text: dumpRequest })
+        },
+      })
+    })
+
     await ctx.session.hook("context", inject)
     if (config.includeCompaction) await ctx.session.hook("compaction", inject)
   },
