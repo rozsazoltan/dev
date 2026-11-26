@@ -92,11 +92,13 @@ export async function launchInstructionFile(path: string, distro = process.env.W
   else if (process.platform === "darwin") attempts.push(["open", [path]])
   else {
     if (process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) {
-      // Windows interop: the distro path as a UNC path, opened by Windows itself.
+      // Windows interop: hand Windows the `\\wsl$\` or `\\wsl.localhost\` form of the distro path.
       if (distro) {
-        attempts.push(["explorer.exe", [windowsPath(path, distro, "wsl.localhost")]])
-        attempts.push(["cmd.exe", ["/c", "start", "", windowsPath(path, distro, "wsl.localhost")]])
-        attempts.push(["explorer.exe", [windowsPath(path, distro, "wsl$")]])
+        for (const host of ["wsl$", "wsl.localhost"] as const) {
+          const unc = windowsPath(path, distro, host)
+          attempts.push(["cmd.exe", ["/c", "start", "", unc]])
+          attempts.push(["explorer.exe", [unc]])
+        }
       }
       attempts.push(["wslview", [path]])
     }
