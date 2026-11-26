@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process"
 import { lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, extname, isAbsolute, join, relative, resolve } from "node:path"
@@ -74,6 +75,49 @@ export async function createInstructionFile(scope: "project" | "global", name: s
     throw error
   }
   return path
+}
+
+/** Windows path for a WSL path, so Windows openers can reach it. */
+function windowsPath(path: string, distro: string, host: "wsl.localhost" | "wsl$"): string {
+  return `\\\\${host}\\${distro}${path.replace(/\//g, "\\")}`
+}
+
+/**
+ * Opens one file with the operating system's default application for Markdown.
+ * Tries each opener in turn, so a headless server fails with a readable error instead of hanging.
+ */
+export async function launchInstructionFile(path: string, distro = process.env.WSL_DISTRO_NAME): Promise<void> {
+  const attempts: Array<[string, string[]]> = []
+  if (process.platform === "win32") attempts.push(["cmd", ["/c", "start", "", path]])
+  else if (process.platform === "darwin") attempts.push(["open", [path]])
+  else {
+    if (process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) {
+      // Windows interop: the distro path as a UNC path, opened by Windows itself.
+      if (distro) {
+        attempts.push(["explorer.exe", [windowsPath(path, distro, "wsl.localhost")]])
+        attempts.push(["cmd.exe", ["/c", "start", "", windowsPath(path, distro, "wsl.localhost")]])
+        attempts.push(["explorer.exe", [windowsPath(path, distro, "wsl$")]])
+      }
+      attempts.push(["wslview", [path]])
+    }
+    attempts.push(["xdg-open", [path]])
+  }
+  for (const [command, args] of attempts) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(command, args, { detached: true, stdio: "ignore" })
+        child.once("error", reject)
+        child.once("spawn", () => {
+          child.unref()
+          resolve()
+        })
+      })
+      return
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") throw error
+    }
+  }
+  throw new Error("No system opener found. Install xdg-open, or open the file manually.")
 }
 
 function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, name: string): number {

@@ -196,18 +196,28 @@ export default Plugin.define({
       }
     }
 
-    function edit(path: string) {
-      const session = ctx.sessions.current()
-      if (!session?.location) return
-      const openInApp = () => ctx.links.open({ href: path, exact: true, session })
-      // Editing belongs to the desktop's default editor; the in-app editor covers the web and launch failures.
-      if (!ctx.desktop) {
-        openInApp()
+    async function edit(path: string) {
+      const captured = current()
+      if (!captured) return
+      let reason = ""
+      // The server owns the file, so ask its OS to open it with the default editor first.
+      try {
+        await captured.server.client.rpc(Instructions).open({ path }, { location: captured.location })
         return
+      } catch (error) {
+        reason = message(error)
       }
-      ctx.desktop.launch(path).catch(() => {
-        if (!openInApp()) setFailure(`Could not open ${path} with the system editor.`)
-      })
+      if (ctx.desktop) {
+        try {
+          await ctx.desktop.launch(path)
+          return
+        } catch (error) {
+          reason = message(error)
+        }
+      }
+      const session = ctx.sessions.current()
+      if (session?.location && ctx.links.open({ href: path, exact: true, session })) return
+      if (matches(current(), captured)) setFailure(reason || `Could not open ${path}.`)
     }
     async function remove(file: File) {
       const captured = current()
@@ -257,7 +267,7 @@ export default Plugin.define({
         ) as { path: string }
         if (!matches(current(), captured)) return
         await load(captured)
-        edit(result.path)
+        void edit(result.path)
       } catch (error) {
         if (matches(current(), captured)) setFailure(message(error))
       } finally {
@@ -337,7 +347,7 @@ export default Plugin.define({
                                       label="Edit"
                                       size="small"
                                       disabled={!file.exists || !ready()}
-                                      onClick={() => edit(file.path)}
+                                      onClick={() => void edit(file.path)}
                                     />
                                   </ctx.ui.Tooltip>
                                   <ctx.ui.Tooltip value="Delete file">

@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode/plugin"
 import { unlink } from "node:fs/promises"
-import { collectInstructionCandidates, createInstructionFile, INSTRUCTION_MARKER, mergeInstructions, parseOptions, readInstructionSource } from "./merge.ts"
+import { collectInstructionCandidates, createInstructionFile, INSTRUCTION_MARKER, launchInstructionFile, mergeInstructions, parseOptions, readInstructionSource } from "./merge.ts"
 import { Instructions } from "./rpc.ts"
 import { normalizeInstructionPath, readToggles, writeToggles } from "./toggles.ts"
 
@@ -124,6 +124,19 @@ export default Plugin.define({
         })
         updates = operation.then(() => undefined, () => undefined)
         return operation
+      },
+      open: async (input: unknown) => {
+        if (typeof input !== "object" || input === null || !("path" in input) || typeof input.path !== "string") {
+          throw new Error("Invalid instruction open request")
+        }
+        const { path } = input
+        const candidates = await collectInstructionCandidates(config, projectRoot)
+        const key = normalizeInstructionPath(path)
+        const candidate = candidates.find((file) => normalizeInstructionPath(file.path) === key)
+        if (!candidate) throw new Error(`Unknown instruction path: ${path}`)
+        if (!candidate.exists) throw new Error(`Missing instruction file: ${candidate.label}`)
+        await launchInstructionFile(candidate.path)
+        return { ok: true }
       },
     })
 
