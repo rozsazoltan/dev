@@ -21,7 +21,7 @@ The **Project** and **Global** headings also have a plus button. Enter a name, a
 
 Files default to enabled. Disabled paths persist in server-side plugin storage under `instruction-toggles`; changing a switch does not edit the source file or `AGENTS.md`. Deleting a file removes it from that storage too. The dialog uses the active session's server and project location, including WSL and remote servers. It does not browse your desktop's filesystem.
 
-The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns files with their scope, existence and enabled state, plus the built-in master flag; `set({ path, enabled })` updates one file; `setBuiltin({ enabled })` updates the master flag; `create({ scope, name })` creates one file and returns its path; `remove({ path })` deletes a project or global file; `changed` notifies open dialogs to refresh.
+The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns files with their scope, existence and enabled state, plus the built-in master flag; `set({ path, enabled })` updates one file; `setBuiltin({ enabled })` updates the master flag; `create({ scope, name })` creates one file and returns its path; `remove({ path })` deletes a project or global file; `open({ path })` hands a file to the server's operating system default editor; `changed` notifies open dialogs to refresh.
 
 ## Install from shared monorepo
 
