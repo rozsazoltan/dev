@@ -1,28 +1,36 @@
 import { Plugin } from "@opencode/plugin"
-import { collectInstructionCandidates, INSTRUCTION_MARKER, mergeInstructions, parseOptions, readInstructionSource } from "./merge.ts"
+import { unlink } from "node:fs/promises"
+import { collectInstructionCandidates, createInstructionFile, INSTRUCTION_MARKER, launchInstructionFile, mergeInstructions, parseOptions, readInstructionSource, wslWindowsPath } from "./merge.ts"
 import { Instructions } from "./rpc.ts"
-import { normalizeInstructionPath, readDisabled, writeDisabled } from "./toggles.ts"
+import { normalizeInstructionPath, readToggles, writeToggles } from "./toggles.ts"
 
 /** OpenCode V2 server plugin. Injects exactly one model-visible system part. */
 export default Plugin.define({
   id: "rozsazoltan.opencode-instructions",
   async setup(ctx) {
-    const config = parseOptions(ctx.options)
+    const config = parseOptions({
+      ...ctx.options,
+      includeBuiltin: ctx.options.includeBuiltin ?? true,
+      includeDefaultDirectories: ctx.options.includeDefaultDirectories ?? true,
+    })
     const projectRoot = ctx.location.project.canonical || ctx.location.directory
     const storage = ctx.storage
 
     let updates = Promise.resolve()
     const registration = await ctx.rpc.register(Instructions, {
       list: async () => {
-        const disabled = await readDisabled(storage)
+        const toggles = await readToggles(storage)
+        // Every scope stays listed: a section turned off must stay visible so it can be turned back on.
         const candidates = await collectInstructionCandidates(config, projectRoot)
         return {
           files: candidates.map((file) => ({
             path: file.path,
             label: file.label,
             exists: file.exists,
-            enabled: !disabled.has(normalizeInstructionPath(file.path)),
+            enabled: !toggles.disabled.has(normalizeInstructionPath(file.path)),
+            scope: file.scope,
           })),
+          builtin: toggles.builtin,
         }
       },
       read: async (input: unknown) => {
@@ -30,6 +38,7 @@ export default Plugin.define({
           throw new Error("Invalid instruction read request")
         }
         const { path } = input
+        // Preview ignores the built-in master switch: a hidden-from-context file can still be read and edited.
         const candidates = await collectInstructionCandidates(config, projectRoot)
         const key = normalizeInstructionPath(path)
         const candidate = candidates.find((file) => normalizeInstructionPath(file.path) === key)
@@ -49,28 +58,124 @@ export default Plugin.define({
             throw new Error(`Unknown instruction path: ${path}`)
           }
         }).then(async () => {
-          const disabled = await readDisabled(storage)
-          if (enabled) disabled.delete(normalizeInstructionPath(path))
-          else disabled.add(normalizeInstructionPath(path))
-          await writeDisabled(storage, disabled)
+          const toggles = await readToggles(storage)
+          if (enabled) toggles.disabled.delete(normalizeInstructionPath(path))
+          else toggles.disabled.add(normalizeInstructionPath(path))
+          await writeToggles(storage, toggles)
           await registration.events.emit("changed", {})
           return { ok: true }
         })
         updates = operation.then(() => undefined, () => undefined)
         return operation
       },
+      setBuiltin: async (input: unknown) => {
+        if (typeof input !== "object" || input === null || !("enabled" in input) || typeof input.enabled !== "boolean") {
+          throw new Error("Invalid built-in toggle request")
+        }
+        const { enabled } = input
+        const operation = updates.then(async () => {
+          const toggles = await readToggles(storage)
+          if (toggles.builtin === enabled) return
+          toggles.builtin = enabled
+          await writeToggles(storage, toggles)
+          await registration.events.emit("changed", {})
+        })
+        updates = operation.then(() => undefined, () => undefined)
+        return operation.then(() => ({ ok: true }))
+      },
+      create: async (input: unknown) => {
+        if (
+          typeof input !== "object" ||
+          input === null ||
+          !("scope" in input) ||
+          !("name" in input) ||
+          typeof input.scope !== "string" ||
+          typeof input.name !== "string"
+        ) {
+          throw new Error("Invalid instruction create request")
+        }
+        const { scope, name } = input
+        if (scope !== "project" && scope !== "global") throw new Error(`Unknown instruction scope: ${scope}`)
+        const operation = updates.then(async () => {
+          const path = await createInstructionFile(scope, name, projectRoot)
+          await registration.events.emit("changed", {})
+          return { path }
+        })
+        updates = operation.then(() => undefined, () => undefined)
+        return operation
+      },
+      remove: async (input: unknown) => {
+        if (typeof input !== "object" || input === null || !("path" in input) || typeof input.path !== "string") {
+          throw new Error("Invalid instruction remove request")
+        }
+        const { path } = input
+        const operation = updates.then(async () => {
+          const candidates = await collectInstructionCandidates(config, projectRoot)
+          const key = normalizeInstructionPath(path)
+          const candidate = candidates.find((file) => normalizeInstructionPath(file.path) === key)
+          if (!candidate) throw new Error(`Unknown instruction path: ${path}`)
+          if (candidate.scope === "builtin") throw new Error("Built-in instruction files cannot be deleted")
+          if (!candidate.exists) throw new Error(`Missing instruction file: ${candidate.label}`)
+          await unlink(candidate.path)
+          const toggles = await readToggles(storage)
+          if (toggles.disabled.delete(key)) await writeToggles(storage, toggles)
+          await registration.events.emit("changed", {})
+          return { ok: true }
+        })
+        updates = operation.then(() => undefined, () => undefined)
+        return operation
+      },
+      open: async (input: unknown) => {
+        if (typeof input !== "object" || input === null || !("path" in input) || typeof input.path !== "string") {
+          throw new Error("Invalid instruction open request")
+        }
+        const { path } = input
+        const candidates = await collectInstructionCandidates(config, projectRoot)
+        const key = normalizeInstructionPath(path)
+        const candidate = candidates.find((file) => normalizeInstructionPath(file.path) === key)
+        if (!candidate) throw new Error(`Unknown instruction path: ${path}`)
+        if (!candidate.exists) throw new Error(`Missing instruction file: ${candidate.label}`)
+        try {
+          await launchInstructionFile(candidate.path)
+          return { ok: true }
+        } catch (error) {
+          // A WSL server without interop cannot open anything; the desktop host can, through the UNC path.
+          const path = wslWindowsPath(candidate.path)
+          if (!path) throw error
+          return { ok: false, path }
+        }
+      },
     })
 
     const inject = async (event: { system: Array<{ type: string; text?: string }> }): Promise<void> => {
       if (event.system.some((part) => part.type === "text" && part.text?.startsWith(INSTRUCTION_MARKER))) return
-      const disabled = await readDisabled(storage)
-      const merged = await mergeInstructions(config, projectRoot, disabled)
+      const toggles = await readToggles(storage)
+      const merged = await mergeInstructions({ ...config, includeBuiltin: config.includeBuiltin && toggles.builtin }, projectRoot, toggles.disabled)
       for (const warning of merged.warnings) {
         console.warn(`[rozsazoltan.opencode-instructions] ${warning}`)
       }
       if (!merged.text) return
       event.system.push({ type: "text", text: merged.text })
     }
+
+    const dumpRequest = [
+      "Print the instruction block this session received, verbatim, inside one fenced code block.",
+      "",
+      "- Start at the `# Combined user instructions` heading and keep every `### Source N: <filename>` heading under it.",
+      "- Do not summarize, reorder, shorten or reformat. Keep the original wording and the blank lines.",
+      "- If no such block exists, answer `No injected instruction block found` and nothing else.",
+      "- After the code block, add one line: `Sources: <comma-separated filenames>`, or `Sources: none`.",
+    ].join("\n")
+
+    await ctx.command.transform((editor) => {
+      editor.add({
+        name: "instructions",
+        description: "Print the instruction files injected into this session",
+        execute: async ({ sessionID }) => {
+          await ctx.session.prompt({ sessionID, text: dumpRequest })
+        },
+      })
+    })
 
     await ctx.session.hook("context", inject)
     if (config.includeCompaction) await ctx.session.hook("compaction", inject)

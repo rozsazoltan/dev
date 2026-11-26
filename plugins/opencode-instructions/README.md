@@ -8,15 +8,22 @@ OpenCode V2 server plugin that reads explicit Markdown files and directories and
 - Deduplicates repeated files, skips symbolic links and non-Markdown files.
 - Enforces per-file and total size limits.
 - Does not rewrite user messages or persist merged instructions to disk.
-- Reads only configured sources and their immediate Markdown children, or the bundled instruction directory when `sources` is omitted.
+- Reads three scopes: built-in files shipped in `instructions/`, project files from `options.sources`, `.agents/instructions/`, and `.opencode/instructions/`, and global files from `~/.config/opencode/instructions/`.
+- Reads only Markdown files and their immediate Markdown children; never recurses.
 
 ## Per-file toggles
 
-In an OpenCode Desktop session, click **Instructions** in the session header. The dialog lists configured Markdown files, their paths, and missing-file status. Switch a file **On** or **Off**; changes apply to subsequent model requests, including compaction when `includeCompaction` is enabled.
+In an OpenCode Desktop session, click **Instructions** in the session header. The dialog groups files into **Built-in**, **Project**, and **Global** sections, each with a bold heading and a rule above its card. All three sections stay listed, even with no files and even when the built-in master switch is off. Switch a file **On** or **Off**; changes apply to subsequent model requests, including compaction when `includeCompaction` is enabled. The built-in section also has a master switch in its own bordered card that excludes every built-in file at once; it is on by default.
 
-Files default to enabled. Disabled paths persist in server-side plugin storage under `instruction-toggles`; changing a switch does not edit the source file or `AGENTS.md`. The dialog uses the active session's server and project location, including WSL and remote servers. It does not browse your desktop's filesystem.
+Each row has **Show** for a Markdown preview; project and global rows also have a pencil button that opens the file in your desktop's default editor, and a trash button that deletes it after a confirmation. Built-in files ship with the plugin, so they have neither. A missing file stays listed so you can spot a misconfigured path.
 
-The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns configured files and their enabled state; `set({ path, enabled })` updates a configured file; `changed` notifies open dialogs to refresh.
+The **Project** and **Global** headings also have a plus button. Enter a name, and the plugin creates `<name>.md` in that scope's directory (`<project>/.opencode/instructions/` or `~/.config/opencode/instructions/`) with a heading line, then opens it in your default editor. Existing files are never overwritten.
+
+Files default to enabled. Disabled paths persist in server-side plugin storage under `instruction-toggles`; changing a switch does not edit the source file or `AGENTS.md`. Deleting a file removes it from that storage too. The dialog uses the active session's server and project location, including WSL and remote servers. It does not browse your desktop's filesystem.
+
+The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns files with their scope, existence and enabled state, plus the built-in master flag; `set({ path, enabled })` updates one file; `setBuiltin({ enabled })` updates the master flag; `create({ scope, name })` creates one file and returns its path; `remove({ path })` deletes a project or global file; `open({ path })` hands a file to the server's operating system default editor, or returns the Windows `\\wsl$\` path for the desktop app to open when the server runs in WSL without interop; `changed` notifies open dialogs to refresh.
+
+The plugin also registers the `/instructions` command. It asks the model to print the injected block verbatim in one fenced code block, from the `# Combined user instructions` heading through every `### Source N:` heading, followed by a `Sources:` line, so you can check what actually reached the context. A model can shorten that listing; the server-side merge is the exact source.
 
 ## Install from shared monorepo
 
@@ -28,9 +35,9 @@ opencode plugin add 'github:rozsazoltan/dev#master::path:plugins/opencode-instru
 
 The package is separate from APM's `plugin.json` bundles. **Do not assume `apm install` will install an executable OpenCode V2 server plugin.**
 
-No options are required. A plain-string entry uses all seven Markdown files bundled in `examples/instructions/`, including the browser, recovery, completion, communication, and Git/planning rules. Use the **Instructions** dialog to disable individual files. The bundled directory resolves from the installed plugin, not your project or working directory.
+No options are required. The plugin always reads its seven built-in files from `instructions/` in the installed package, then every `*.md` in the project's `.agents/instructions/` and `.opencode/instructions/`, then every `*.md` in `~/.config/opencode/instructions/` (`$XDG_CONFIG_HOME` is honored). Use the **Instructions** dialog to disable individual files. Built-in files resolve from the installed plugin, not your project or working directory.
 
-Use the *object form* in global `~/.config/opencode/opencode.jsonc` to override sources or other options. Explicit `sources` replace the bundled defaults; they are not added to them. Add this entry to the existing `plugins` array; preserve existing entries:
+Use the *object form* in global `~/.config/opencode/opencode.jsonc` to override sources or other options. Explicit `sources` add project-scope files; they do not replace the built-in or default directories. Set `includeBuiltin` or `includeDefaultDirectories` to `false` to drop those scopes. Add this entry to the existing `plugins` array; preserve existing entries:
 
 ```jsonc
 {
@@ -83,7 +90,9 @@ WSL example path: `/github/rozsazoltan/dev/plugins/opencode-instructions`.
 
 | Option | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `sources` | `string[]` | Bundled `examples/instructions/` | Explicit `.md` files or directories override bundled instructions; directories contribute their immediate `.md` children. |
+| `sources` | `string[]` | `[]` | Extra project-scope `.md` files or directories; directories contribute their immediate `.md` children. |
+| `includeBuiltin` | `boolean` | `true` | Read the built-in files in the package's `instructions/` directory. |
+| `includeDefaultDirectories` | `boolean` | `true` | Read the project `.agents/instructions/` and `.opencode/instructions/` directories and the global `~/.config/opencode/instructions/` directory. |
 | `exclude` | `string[]` | `[]` | Exact `.md` basenames to skip in configured directories; case-insensitive, no globs. |
 | `includeCompaction` | `boolean` | `false` | Also inject same instructions into compaction requests. |
 | `onMissing` | `"warn" \| "ignore" \| "error"` | `"warn"` | Missing or skipped source behavior. |
@@ -96,15 +105,15 @@ One joined system text part is appended through `ctx.session.hook("context", ...
 
 ## Migrating your current AGENTS.md
 
-To customize the bundled instructions, copy the files you want from `examples/instructions/` into your own source directory:
+To customize the built-in instructions, copy the files you want from `instructions/` into your own source directory:
 
 - `browser-research.md`: browser-based research, authenticated sessions, and human challenge handoff.
 - `context-recovery.md`: planning files, durable task state, and recovery after compaction.
 - `completion-verification.md`: evidence-based completion checks.
 
-These files load automatically when `sources` is omitted. When you configure custom sources, include their copied paths or directory if you want to keep them enabled.
+These files load automatically from the package. When you copy them into your own directory, disable the built-in copies in the **Instructions** dialog, or set `includeBuiltin` to `false`.
 
-1. Copy desired text into separate Markdown files under `~/.config/opencode/instructions/` (starter content included in `examples/instructions/`).
+1. Copy desired text into separate Markdown files under `~/.config/opencode/instructions/` (starter content included in `instructions/`). The plugin reads that directory automatically.
 2. Keep current global `AGENTS.md` until plugin loads and instructions work in an OpenCode session.
 3. After verification, remove or slim **duplicate** text from global `AGENTS.md`, and remove any duplicated files from OpenCode's built-in `instructions` array.
 4. Keep project-level `AGENTS.md` files for project-specific rules. Global plugin supplements, not overrides, those instructions.
@@ -132,7 +141,7 @@ Local checks do not verify remote Git-subdirectory loading or live OpenCode Desk
 
 ## Troubleshooting
 
-- No instructions loaded: check the **Instructions** switches. If you set `options.sources`, confirm those paths exist in *the OpenCode server process's filesystem* (important for WSL and remote servers); omit `sources` to use bundled instructions.
+- No instructions loaded: check the **Instructions** switches, including the built-in master switch. Confirm paths exist in *the OpenCode server process's filesystem* (important for WSL and remote servers).
 - Duplicate instructions: remove matching content from legacy global `AGENTS.md` or built-in `instructions` entries.
 - On Windows, use `D:/github/...` absolute plugin paths for local installs; use `/github/...` or `/mnt/d/...` as appropriate within WSL.
 - Missing files produce warnings by default; use `onMissing: "error"` when every source is mandatory.

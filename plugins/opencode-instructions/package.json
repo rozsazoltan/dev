@@ -11,6 +11,7 @@
     "src",
     "dist",
     "examples",
+    "instructions",
     "README.md"
   ],
   "scripts": {
