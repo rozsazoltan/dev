@@ -15,13 +15,13 @@ OpenCode V2 server plugin that reads explicit Markdown files and directories and
 
 In an OpenCode Desktop session, click **Instructions** in the session header. The dialog groups files into **Built-in**, **Project**, and **Global** sections, each with a bold heading and a rule above its card. All three sections stay listed, even with no files and even when the built-in master switch is off. Switch a file **On** or **Off**; changes apply to subsequent model requests, including compaction when `includeCompaction` is enabled. The built-in section also has a master switch in its own bordered card that excludes every built-in file at once; it is on by default.
 
-Each row has **Show** for a Markdown preview; project and global rows also have a pencil button that opens the file in the app's file editor. Built-in files ship with the plugin, so they have no pencil. A missing file stays listed so you can spot a misconfigured path.
+Each row has **Show** for a Markdown preview; project and global rows also have a pencil button that opens the file in your desktop's default editor, and a trash button that deletes it after a confirmation. Built-in files ship with the plugin, so they have neither. A missing file stays listed so you can spot a misconfigured path.
 
-The **Project** and **Global** headings also have a plus button. Enter a name, and the plugin creates `<name>.md` in that scope's directory (`<project>/.opencode/instructions/` or `~/.config/opencode/instructions/`) with a heading line, then opens it for editing. Existing files are never overwritten.
+The **Project** and **Global** headings also have a plus button. Enter a name, and the plugin creates `<name>.md` in that scope's directory (`<project>/.opencode/instructions/` or `~/.config/opencode/instructions/`) with a heading line, then opens it in your default editor. Existing files are never overwritten.
 
-Files default to enabled. Disabled paths persist in server-side plugin storage under `instruction-toggles`; changing a switch does not edit the source file or `AGENTS.md`. The dialog uses the active session's server and project location, including WSL and remote servers. It does not browse your desktop's filesystem.
+Files default to enabled. Disabled paths persist in server-side plugin storage under `instruction-toggles`; changing a switch does not edit the source file or `AGENTS.md`. Deleting a file removes it from that storage too. The dialog uses the active session's server and project location, including WSL and remote servers. It does not browse your desktop's filesystem.
 
-The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns files with their scope, existence and enabled state, plus the built-in master flag; `set({ path, enabled })` updates one file; `setBuiltin({ enabled })` updates the master flag; `create({ scope, name })` creates one file and returns its path; `changed` notifies open dialogs to refresh.
+The GUI uses the `rozsazoltan.opencode-instructions` RPC: `list` returns files with their scope, existence and enabled state, plus the built-in master flag; `set({ path, enabled })` updates one file; `setBuiltin({ enabled })` updates the master flag; `create({ scope, name })` creates one file and returns its path; `remove({ path })` deletes a project or global file; `changed` notifies open dialogs to refresh.
 
 ## Install from shared monorepo
 

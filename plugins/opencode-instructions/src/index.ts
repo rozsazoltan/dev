@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin"
+import { unlink } from "node:fs/promises"
 import { collectInstructionCandidates, createInstructionFile, INSTRUCTION_MARKER, mergeInstructions, parseOptions, readInstructionSource } from "./merge.ts"
 import { Instructions } from "./rpc.ts"
 import { normalizeInstructionPath, readToggles, writeToggles } from "./toggles.ts"
@@ -99,6 +100,27 @@ export default Plugin.define({
           const path = await createInstructionFile(scope, name, projectRoot)
           await registration.events.emit("changed", {})
           return { path }
+        })
+        updates = operation.then(() => undefined, () => undefined)
+        return operation
+      },
+      remove: async (input: unknown) => {
+        if (typeof input !== "object" || input === null || !("path" in input) || typeof input.path !== "string") {
+          throw new Error("Invalid instruction remove request")
+        }
+        const { path } = input
+        const operation = updates.then(async () => {
+          const candidates = await collectInstructionCandidates(config, projectRoot)
+          const key = normalizeInstructionPath(path)
+          const candidate = candidates.find((file) => normalizeInstructionPath(file.path) === key)
+          if (!candidate) throw new Error(`Unknown instruction path: ${path}`)
+          if (candidate.scope === "builtin") throw new Error("Built-in instruction files cannot be deleted")
+          if (!candidate.exists) throw new Error(`Missing instruction file: ${candidate.label}`)
+          await unlink(candidate.path)
+          const toggles = await readToggles(storage)
+          if (toggles.disabled.delete(key)) await writeToggles(storage, toggles)
+          await registration.events.emit("changed", {})
+          return { ok: true }
         })
         updates = operation.then(() => undefined, () => undefined)
         return operation

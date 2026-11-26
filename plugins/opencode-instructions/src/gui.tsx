@@ -18,7 +18,7 @@ const CSS = `
 .oci-trigger:hover { background: var(--surface-hover); }
 .oci-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .oci-dialog { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.oci-list { display: flex; flex-direction: column; gap: 16px; max-height: min(60vh, 560px); overflow: auto; }
+.oci-list { display: flex; flex-direction: column; gap: 16px; }
 .oci-section { display: flex; flex-direction: column; gap: 10px; }
 .oci-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding-bottom: 6px; border-bottom: 1px solid var(--border-weak); }
@@ -199,8 +199,42 @@ export default Plugin.define({
     function edit(path: string) {
       const session = ctx.sessions.current()
       if (!session?.location) return
-      if (ctx.links.open({ href: path, exact: true, session })) return
-      void ctx.desktop?.launch(path)
+      const openInApp = () => ctx.links.open({ href: path, exact: true, session })
+      // Editing belongs to the desktop's default editor; the in-app editor covers the web and launch failures.
+      if (!ctx.desktop) {
+        openInApp()
+        return
+      }
+      ctx.desktop.launch(path).catch(() => {
+        if (!openInApp()) setFailure(`Could not open ${path} with the system editor.`)
+      })
+    }
+    async function remove(file: File) {
+      const captured = current()
+      if (!captured || !ready()) return
+      const confirmed = await ctx.dialogs.confirm({
+        title: `Delete ${file.label}?`,
+        description: `${file.path} is deleted from disk. This cannot be undone.`,
+        confirm: "Delete",
+        danger: true,
+      })
+      if (!confirmed || !matches(current(), captured)) return
+      const writeID = ++writeRequest
+      setBusy(file.path)
+      setFailure("")
+      try {
+        const result = await captured.server.client.rpc(Instructions).remove(
+          { path: file.path },
+          { location: captured.location },
+        ) as { ok: boolean }
+        if (!matches(current(), captured)) return
+        if (!result.ok) throw new Error("Could not delete instruction file.")
+        await load(captured)
+      } catch (error) {
+        if (matches(current(), captured)) setFailure(message(error))
+      } finally {
+        if (writeID === writeRequest) setBusy(undefined)
+      }
     }
 
     async function create(scope: "project" | "global") {
@@ -304,6 +338,16 @@ export default Plugin.define({
                                       size="small"
                                       disabled={!file.exists || !ready()}
                                       onClick={() => edit(file.path)}
+                                    />
+                                  </ctx.ui.Tooltip>
+                                  <ctx.ui.Tooltip value="Delete file">
+                                    <ctx.ui.IconButton
+                                      icon="trash"
+                                      label="Delete"
+                                      variant="ghost"
+                                      size="small"
+                                      disabled={!file.exists || !ready()}
+                                      onClick={() => void remove(file)}
                                     />
                                   </ctx.ui.Tooltip>
                                 </Show>

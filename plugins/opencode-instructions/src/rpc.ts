@@ -85,6 +85,20 @@ export const Instructions = Rpc.define({
         additionalProperties: false,
       },
     },
+    remove: {
+      input: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+        additionalProperties: false,
+      } as const,
+      output: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+        additionalProperties: false,
+      },
+    },
   },
   events: {
     changed: {
