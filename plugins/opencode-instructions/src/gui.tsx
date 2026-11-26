@@ -202,8 +202,16 @@ export default Plugin.define({
       let reason = ""
       // The server owns the file, so ask its OS to open it with the default editor first.
       try {
-        await captured.server.client.rpc(Instructions).open({ path }, { location: captured.location })
-        return
+        const result = (await captured.server.client.rpc(Instructions).open({ path }, { location: captured.location })) as {
+          ok: boolean
+          path?: string
+        }
+        if (result.ok) return
+        // A WSL server cannot reach Windows; the desktop host opens the `\\wsl$\` path instead.
+        if (result.path && ctx.desktop) {
+          await ctx.desktop.launch(result.path)
+          return
+        }
       } catch (error) {
         reason = message(error)
       }

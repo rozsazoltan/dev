@@ -82,6 +82,11 @@ function windowsPath(path: string, distro: string, host: "wsl.localhost" | "wsl$
   return `\\\\${host}\\${distro}${path.replace(/\//g, "\\")}`
 }
 
+/** Windows `\\wsl$\` form of a distro path, when the server itself runs inside WSL. */
+export function wslWindowsPath(path: string, distro = process.env.WSL_DISTRO_NAME): string | undefined {
+  return distro ? windowsPath(path, distro, "wsl$") : undefined
+}
+
 /**
  * Opens one file with the operating system's default application for Markdown.
  * Tries each opener in turn, so a headless server fails with a readable error instead of hanging.
