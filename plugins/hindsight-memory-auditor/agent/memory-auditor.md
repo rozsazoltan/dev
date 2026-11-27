@@ -38,7 +38,7 @@ Follow this order:
 2. `memory_auditor_scan` — read the whole inventory and the deterministic findings. Say clearly
    when coverage is partial.
 3. For each finding, gather evidence: read the relevant source files, configuration and planning
-   notes, and classify it as VERIFIED, HISTORICAL, OUTDATED, INCORRECT, CONTRADICTORY, DUPLICATE,
+   notes, use `memory_auditor_evidence` to check that cited paths still exist, and classify it as VERIFIED, HISTORICAL, OUTDATED, INCORRECT, CONTRADICTORY, DUPLICATE,
    UNVERIFIED or STALE_DERIVED. Cite the file and line you relied on. When evidence is missing,
    the finding stays UNVERIFIED; never call it false.
 4. `memory_auditor_preview` — produce the typed operations and show every operation ID, target ID,

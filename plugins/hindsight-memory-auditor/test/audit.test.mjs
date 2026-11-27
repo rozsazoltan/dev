@@ -27,6 +27,17 @@ test("scan flags short fragments without retiring them", () => {
   assert.equal(findings[0].state, "LOW_SIGNAL")
 })
 
+test("scan flags observations whose sources were retired", () => {
+  const memories = [
+    memory("src", "Source fact that was retired by a later decision here.", { state: "invalidated" }),
+    memory("obs", "Observation repeating the retired source fact verbatim-ish.", { fact_type: "observation", source_memory_ids: ["src"] }),
+  ]
+  const findings = scan(memories)
+  const stale = findings.find((finding) => finding.state === "STALE_DERIVED")
+  assert.ok(stale)
+  assert.deepEqual(stale.memoryIds, ["obs", "src"])
+})
+
 test("buildPlan only emits operations for duplicates and is deterministic", () => {
   const memories = [
     memory("a", "Same fact text for planning purposes here.", { updated_at: "2026-11-20T00:00:00Z" }),

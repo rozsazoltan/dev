@@ -6,7 +6,7 @@ repository and applies only the corrections you approve.
 ## What it does
 
 - Reads the whole bank through the Hindsight REST API, paginated, not a top-k recall sample.
-- Triages deterministically: exact duplicates and fragments shorter than 40 characters.
+- Triages deterministically: exact duplicates, fragments shorter than 40 characters, and observations whose source memories were retired (`STALE_DERIVED`).
 - Leaves judgement about truth to the agent and to repository evidence; nothing is retired from a
   heuristic alone.
 - Turns accepted findings into typed operations, each bound to a memory ID, its current text and a
@@ -82,6 +82,7 @@ Select **Memory Auditor** in the agent picker, then:
 
 ## Known limitations
 
+- Git evidence is not wired yet: the plugin has no vcs call, so history checks rely on files until that scope contract is validated.
 - The guard covers OpenCode tool execution. It cannot stop a *different* loaded plugin from acting
   on its own hooks, and it does not sandbox the model.
 - There is no approval UI: approval is the caller passing explicit operation IDs to

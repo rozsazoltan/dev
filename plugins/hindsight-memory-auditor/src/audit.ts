@@ -61,6 +61,24 @@ export function scan(memories: MemoryUnit[], options: { minTextLength?: number }
     })
   }
 
+  const byId = new Map(memories.map((memory) => [memory.id, memory]))
+  for (const memory of valid) {
+    const sourceIds = memory.source_memory_ids ?? []
+    if (sourceIds.length === 0) continue
+    const sources = sourceIds.map((id) => byId.get(id)).filter((source): source is MemoryUnit => Boolean(source))
+    if (sources.length === 0) continue
+    const retired = sources.filter((source) => (source.state ?? "valid") !== "valid")
+    if (retired.length === 0) continue
+    findings.push({
+      id: `derived-${memory.id}`,
+      state: "STALE_DERIVED",
+      severity: "medium",
+      memoryIds: [memory.id, ...sources.map((source) => source.id)],
+      detail: `Observation built from ${retired.length} retired source memory/memories; it likely repeats content that was already retired.`,
+      evidence: memory.text.slice(0, 160),
+    })
+  }
+
   return findings
 }
 

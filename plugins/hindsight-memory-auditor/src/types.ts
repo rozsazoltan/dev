@@ -25,7 +25,7 @@ export interface Inventory {
   memories: MemoryUnit[]
 }
 
-export type FindingState = "DUPLICATE" | "LOW_SIGNAL" | "CONTRADICTORY" | "UNVERIFIED"
+export type FindingState = "DUPLICATE" | "LOW_SIGNAL" | "CONTRADICTORY" | "UNVERIFIED" | "STALE_DERIVED"
 
 export interface Finding {
   id: string

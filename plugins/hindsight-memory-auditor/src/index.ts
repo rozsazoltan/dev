@@ -16,7 +16,8 @@ export default Plugin.define({
     const state: AuditorState = { plans: new Map() }
 
     await ctx.tool.transform((editor) => {
-      for (const tool of createTools(client, config, state)) editor.add(tool)
+      const root = ctx.location.project.canonical || ctx.location.directory
+      for (const tool of createTools(client, config, state, root)) editor.add(tool)
     })
 
     await ctx.tool.hook("execute.before", (input) => {

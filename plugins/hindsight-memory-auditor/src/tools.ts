@@ -1,6 +1,7 @@
 import { buildPlan, scan } from "./audit.ts"
 import { applyPlan, verifyPlan } from "./executor.ts"
 import type { HindsightClient } from "./hindsight.ts"
+import { createEvidence, formatEvidence } from "./evidence.ts"
 import type { AuditorConfig, Finding, Inventory, MemoryUnit, Plan } from "./types.ts"
 
 export interface AuditorState {
@@ -19,7 +20,8 @@ const object = (properties: Record<string, unknown>, required: string[] = []) =>
 })
 
 /** Tool definitions; each returns `content` text so the transcript stays readable. */
-export function createTools(client: HindsightClient, config: AuditorConfig, state: AuditorState) {
+export function createTools(client: HindsightClient, config: AuditorConfig, state: AuditorState, root: string) {
+  const evidence = createEvidence(root)
   return [
     {
       name: "memory_auditor_status",
@@ -75,6 +77,18 @@ export function createTools(client: HindsightClient, config: AuditorConfig, stat
         const memoryId = readString(input, "memoryId")
         const memory = await client.getMemory(memoryId)
         return { content: formatMemory(memory) }
+      },
+    },
+    {
+      name: "memory_auditor_evidence",
+      description:
+        "Read-only evidence for the repository paths a finding depends on: existence, size and first line. Paths stay inside the project root.",
+      input: object({ paths: { type: "array", items: { type: "string" } } }, ["paths"]),
+      async execute(input: unknown) {
+        const paths = readStrings(input, "paths")
+        if (paths.length === 0) throw new Error("Invalid input: paths must list at least one repository path")
+        const entries = await evidence.inspect(paths)
+        return { content: formatEvidence(entries, root) }
       },
     },
     {
