@@ -17,6 +17,10 @@ const ALLOWED = new Set([
   "memory_auditor_git",
   "memory_auditor_recall",
   "memory_auditor_entities",
+  // Read-only view of the same bank from the official Hindsight coding-agent tools.
+  "hindsight_search_pages",
+  "hindsight_read_page",
+  "hindsight_list_pages",
   "memory_auditor_preview",
   "memory_auditor_apply",
   "memory_auditor_verify",
