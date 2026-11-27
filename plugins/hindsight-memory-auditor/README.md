@@ -66,8 +66,9 @@ Select **Memory Auditor** in the agent picker, then:
 1. `memory_auditor_status` — bank, server and whether mutations are enabled.
 2. `memory_auditor_scan` — inventory and findings.
 3. `memory_auditor_inspect` — one memory with provenance.
-4. `memory_auditor_preview` — typed plan with operation IDs.
-5. Approve the exact IDs.
+4. `memory_auditor_evidence` — whether cited repository paths exist (read-only, sandboxed to the project root); `memory_auditor_git` — branch/head info, working tree status or a bounded diff, without running a command.
+5. `memory_auditor_preview` — typed plan with operation IDs.
+6. Approve the exact IDs.
 6. `memory_auditor_apply`, then `memory_auditor_verify`.
 
 ## Safety model
@@ -82,11 +83,10 @@ Select **Memory Auditor** in the agent picker, then:
 
 ## Known limitations
 
-- Git evidence is not wired yet: the plugin has no vcs call, so history checks rely on files until that scope contract is validated.
 - The guard covers OpenCode tool execution. It cannot stop a *different* loaded plugin from acting
   on its own hooks, and it does not sandbox the model.
 - There is no approval UI: approval is the caller passing explicit operation IDs to
-  `memory_auditor_apply`, and a plan lives in memory for the session, so a restart discards it.
+  `memory_auditor_apply`. Plans persist in plugin storage (last five), so an approval survives a restart.
 - Classification is heuristic plus agent reasoning; contradictions and outdated facts need human
   evidence, and the tool reports them instead of guessing.
 - Editing a memory re-embeds it and drops its derived observations; reprocessing a source document

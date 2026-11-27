@@ -1,7 +1,9 @@
 import { Plugin } from "@opencode/plugin"
 import { resolveConfig } from "./config.ts"
+import { createGitEvidence, type VcsLike } from "./evidence.ts"
 import { denyReason } from "./guard.ts"
 import { HindsightClient } from "./hindsight.ts"
+import { PlanStore } from "./plans.ts"
 import { createTools, type AuditorState } from "./tools.ts"
 
 /**
@@ -13,11 +15,12 @@ export default Plugin.define({
   async setup(ctx) {
     const config = resolveConfig(ctx.options)
     const client = new HindsightClient(config)
-    const state: AuditorState = { plans: new Map() }
+    const state: AuditorState = {}
+    const plans = new PlanStore(ctx.storage)
+    const root = ctx.location.project.canonical || ctx.location.directory
 
     await ctx.tool.transform((editor) => {
-      const root = ctx.location.project.canonical || ctx.location.directory
-      for (const tool of createTools(client, config, state, root)) editor.add(tool)
+      for (const tool of createTools(client, config, state, root, plans, ctx.vcs as unknown as VcsLike)) editor.add(tool)
     })
 
     await ctx.tool.hook("execute.before", (input) => {

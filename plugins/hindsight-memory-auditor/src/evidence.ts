@@ -75,3 +75,31 @@ export function formatEvidence(entries: readonly EvidenceEntry[], root: string):
     .concat(`root: ${base}`)
     .join("\n")
 }
+
+/** Minimal shape of the OpenCode vcs domain that the auditor reads. */
+export interface VcsLike {
+  get(input: { location: { directory: string } }): Promise<{ data: unknown }>
+  status(input: { location: { directory: string } }): Promise<{ data: unknown }>
+  diff(input: { location: { directory: string }; mode: "working" | "branch" | "committed"; base?: string }): Promise<{ data: unknown }>
+}
+
+const clip = (value: unknown, limit: number) => {
+  const text = typeof value === "string" ? value : JSON.stringify(value)
+  return text.length > limit ? `${text.slice(0, limit)}…` : text
+}
+
+/** Read-only git view: branch/head info, working tree status, and a bounded diff summary. */
+export function createGitEvidence(vcs: VcsLike, directory: string) {
+  return {
+    async info(): Promise<string> {
+      return clip((await vcs.get({ location: { directory } })).data, 800)
+    },
+    async status(): Promise<string> {
+      return clip((await vcs.status({ location: { directory } })).data, 4000)
+    },
+    async diff(mode: "working" | "branch" | "committed", base?: string): Promise<string> {
+      const data = (await vcs.diff({ location: { directory }, mode, ...(base ? { base } : {}) })).data
+      return clip(data, 6000)
+    },
+  }
+}

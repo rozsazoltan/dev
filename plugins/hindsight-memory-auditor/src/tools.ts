@@ -1,13 +1,13 @@
 import { buildPlan, scan } from "./audit.ts"
 import { applyPlan, verifyPlan } from "./executor.ts"
 import type { HindsightClient } from "./hindsight.ts"
-import { createEvidence, formatEvidence } from "./evidence.ts"
+import { createEvidence, formatEvidence, type VcsLike, createGitEvidence } from "./evidence.ts"
+import { PlanStore } from "./plans.ts"
 import type { AuditorConfig, Finding, Inventory, MemoryUnit, Plan } from "./types.ts"
 
 export interface AuditorState {
   inventory?: Inventory
   findings?: Finding[]
-  plans: Map<string, Plan>
 }
 
 const text = (value: string) => (value.length > 240 ? `${value.slice(0, 240)}…` : value)
@@ -20,8 +20,16 @@ const object = (properties: Record<string, unknown>, required: string[] = []) =>
 })
 
 /** Tool definitions; each returns `content` text so the transcript stays readable. */
-export function createTools(client: HindsightClient, config: AuditorConfig, state: AuditorState, root: string) {
+export function createTools(
+  client: HindsightClient,
+  config: AuditorConfig,
+  state: AuditorState,
+  root: string,
+  plans: PlanStore,
+  vcs?: VcsLike,
+) {
   const evidence = createEvidence(root)
+  const git = vcs ? createGitEvidence(vcs, root) : undefined
   return [
     {
       name: "memory_auditor_status",
@@ -51,7 +59,7 @@ export function createTools(client: HindsightClient, config: AuditorConfig, stat
         const findings = scan(inventory.memories)
         state.inventory = inventory
         state.findings = findings
-        state.plans.clear()
+
         const counts = findings.reduce<Record<string, number>>((all, finding) => {
           all[finding.state] = (all[finding.state] ?? 0) + 1
           return all
@@ -80,6 +88,21 @@ export function createTools(client: HindsightClient, config: AuditorConfig, stat
       },
     },
     {
+      name: "memory_auditor_git",
+      description:
+        "Read-only git view: branch and head information, working tree status, or a bounded diff. No command is executed.",
+      input: object({ mode: { type: "string", enum: ["info", "status", "diff"] }, base: { type: "string" } }, ["mode"]),
+      async execute(input: unknown) {
+        if (!git) throw new Error("Git evidence is unavailable in this project.")
+        const mode = readString(input, "mode")
+        if (mode === "info") return { content: await git.info() }
+        if (mode === "status") return { content: await git.status() }
+        if (mode !== "diff") throw new Error("Unknown git mode; use info, status or diff.")
+        const base = readOptionalString(input, "base")
+        return { content: await git.diff("working", base) }
+      },
+    },
+    {
       name: "memory_auditor_evidence",
       description:
         "Read-only evidence for the repository paths a finding depends on: existence, size and first line. Paths stay inside the project root.",
@@ -104,7 +127,7 @@ export function createTools(client: HindsightClient, config: AuditorConfig, stat
         const selected = readStrings(input, "findingIds")
         const chosen = selected.length === 0 ? findings : findings.filter((finding) => selected.includes(finding.id))
         const plan = buildPlan(inventory.bank, chosen, inventory.memories)
-        state.plans.set(plan.id, plan)
+        await plans.save(plan)
         if (plan.operations.length === 0) {
           return { content: `plan ${plan.id}: no automatic operations. ${findings.length} findings stay manual.` }
         }
@@ -128,7 +151,7 @@ export function createTools(client: HindsightClient, config: AuditorConfig, stat
       ]),
       async execute(input: unknown) {
         const planId = readString(input, "planId")
-        const plan = state.plans.get(planId)
+        const plan = await plans.load(planId)
         if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview first.`)
         const report = await applyPlan(client, plan, readStrings(input, "operationIds"), { auditOnly: config.auditOnly })
         return {
@@ -148,7 +171,7 @@ export function createTools(client: HindsightClient, config: AuditorConfig, stat
       ]),
       async execute(input: unknown) {
         const planId = readString(input, "planId")
-        const plan = state.plans.get(planId)
+        const plan = await plans.load(planId)
         if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview first.`)
         const report = await verifyPlan(client, plan, readStrings(input, "operationIds"))
         return {
@@ -181,6 +204,12 @@ function readString(input: unknown, key: string): string {
   const value = (input as Record<string, unknown>)[key]
   if (typeof value !== "string" || value.trim() === "") throw new Error(`Invalid input: ${key} must be a nonempty string`)
   return value
+}
+
+function readOptionalString(input: unknown, key: string): string | undefined {
+  if (typeof input !== "object" || input === null) return undefined
+  const value = (input as Record<string, unknown>)[key]
+  return typeof value === "string" && value.trim() !== "" ? value : undefined
 }
 
 function readStrings(input: unknown, key: string): string[] {

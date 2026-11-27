@@ -11,6 +11,7 @@ const ALLOWED = new Set([
   "memory_auditor_scan",
   "memory_auditor_inspect",
   "memory_auditor_evidence",
+  "memory_auditor_git",
   "memory_auditor_preview",
   "memory_auditor_apply",
   "memory_auditor_verify",
