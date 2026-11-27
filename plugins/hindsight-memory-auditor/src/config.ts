@@ -27,9 +27,11 @@ export function readCodingAgentsConfig(path = CODING_AGENTS_CONFIG): CodingAgent
  * of guessing a bank name.
  */
 export function expandBankTemplate(template: string, projectName: string): string {
-  const unknown = template.match(/\{[a-zA-Z]+\}/g)?.filter((token) => token !== "{gitProject}") ?? []
+  // Match every braced token, not just alphabetic ones, so `{workspace_id}` cannot slip through.
+  const unknown = template.match(/\{[^}]+\}/g)?.filter((token) => token !== "{gitProject}") ?? []
   if (unknown.length > 0) throw new Error(`Unsupported bankIdTemplate placeholder(s): ${unknown.join(", ")}`)
-  return template.replace(/\{gitProject\}/g, projectName)
+  // A callback keeps `$&` and similar sequences literal in the project name.
+  return template.replace(/\{gitProject\}/g, () => projectName)
 }
 
 /**

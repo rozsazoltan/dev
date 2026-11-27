@@ -103,6 +103,20 @@ test("resolveConfig expands the integration bank template for the project", () =
 
 test("expandBankTemplate refuses unknown placeholders", () => {
   assert.throws(() => expandBankTemplate("bank::{workspace}", "dev"), /Unsupported bankIdTemplate/)
+  assert.throws(() => expandBankTemplate("bank::{workspace_id}", "dev"), /Unsupported bankIdTemplate/)
+  assert.throws(() => expandBankTemplate("bank::{2fa}", "dev"), /Unsupported bankIdTemplate/)
+})
+
+test("expandBankTemplate inserts the project name literally", () => {
+  assert.equal(expandBankTemplate("bank::{gitProject}", "$&"), "bank::$&")
+  assert.equal(expandBankTemplate("bank::{gitProject}", "dev"), "bank::dev")
+})
+
+test("banks() requests the bank list endpoint, not the server root", async () => {
+  const fetchImpl = fakeFetch({ "/v1/default/banks": () => [200, { banks: [{ bank_id: "bank::x" }] }] })
+  const client = new HindsightClient(config, fetchImpl)
+  assert.deepEqual(await client.banks(), ["bank::x"])
+  assert.equal(fetchImpl.calls[0].path, "/v1/default/banks")
 })
 
 test("a bearer token is refused over non-loopback http", () => {

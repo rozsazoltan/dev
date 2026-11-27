@@ -50,7 +50,7 @@ export class HindsightClient {
 
   /** Banks the server knows, so a mis-resolved bank is visible before any write. */
   async banks(): Promise<string[]> {
-    const response = await this.#fetchResponse("GET", "/v1/default/banks", undefined, "")
+    const response = await this.#fetchResponse("GET", "/v1/default/banks", undefined, "/v1/default/banks")
     const body = (await response.json()) as { banks?: Array<{ bank_id?: string }> }
     return (body.banks ?? []).map((bank) => bank.bank_id ?? "").filter(Boolean)
   }
