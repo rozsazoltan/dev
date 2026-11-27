@@ -15,7 +15,7 @@ repository and applies only the corrections you approve.
 - Applies only the operation IDs you approve, re-reading each target first, then verifies the
   observed state.
 
-Invalidation is the only mutation, and it is the reversible one: Hindsight keeps the memory
+Invalidation is the reversible mutation: Hindsight keeps the memory
 readable and restorable, and excludes it from recall and consolidation.
 
 ## Install
@@ -113,8 +113,13 @@ use; registering directly keeps the tools reachable while the guard stays strict
   `memory_auditor_apply`. Plans persist in plugin storage, last five per session, so an approval survives a restart and sessions stay isolated.
 - Classification is heuristic plus agent reasoning; contradictions and outdated facts need human
   evidence, and the tool reports them instead of guessing.
-- Editing a memory re-embeds it and drops its derived observations; reprocessing a source document
-  can recreate a retired fact. The plugin never reprocesses, and it does not edit text.
+- `edit` re-embeds a memory and drops its derived observations; a `merge` retains what Hindsight
+  extracts from the submitted text, so the stored memories can be split or reworded, and verification
+  checks that a valid replacement exists rather than that its text matches byte for byte.
+- Apply is check-then-write for every operation: Hindsight has no versioned precondition, so a
+  concurrent writer that changes a target or a source between the read and the write is not
+  detected. `restore` and `edit` are the recovery paths.
+- Reprocessing a source document can recreate a retired fact; the plugin never reprocesses.
 - Verified against Hindsight's local server (`/v1/default/banks/...`). A remote deployment needs
   `apiUrl` and, if enforced, a token.
 

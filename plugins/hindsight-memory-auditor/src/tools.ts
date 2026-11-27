@@ -1,4 +1,4 @@
-import { buildPlan, digestId, packPlan, scan } from "./audit.ts"
+import { buildPlan, curatable, digestId, packPlan, scan } from "./audit.ts"
 import { applyPlan, verifyPlan } from "./executor.ts"
 import { createEvidence, createGitEvidence, formatEvidence, type VcsLike } from "./evidence.ts"
 import type { HindsightClient } from "./hindsight.ts"
@@ -214,6 +214,7 @@ export function createTools(
         const memories = await Promise.all(memoryIds.map((memoryId) => client.getMemory(memoryId)))
         for (const memory of memories) {
           if ((memory.state ?? "valid") !== "valid") throw new Error(`Memory ${memory.id} is not valid.`)
+          if (!curatable(memory)) throw new Error(`Memory ${memory.id} is not curatable (fact_type: ${memory.fact_type ?? "unknown"}).`)
         }
         if (kind === "edit") {
           if (memories.length !== 1) throw new Error("edit takes exactly one memoryId")
@@ -227,7 +228,15 @@ export function createTools(
         }
         if (kind !== "merge") throw new Error("kind must be merge or edit")
         if (memories.length < 2) throw new Error("merge takes at least two memoryIds")
-        const operationId = digestId("merge", memories.map((memory) => `${memory.id}:${memory.text}`).join("|") + text)
+        const operationId = digestId(
+          "merge",
+          JSON.stringify({
+            sources: memories.map((memory) => ({ id: memory.id, text: memory.text })),
+            text,
+            context: context_,
+            reason,
+          }),
+        )
         const plan = packPlan(client.bank, [], [
           {
             id: operationId,

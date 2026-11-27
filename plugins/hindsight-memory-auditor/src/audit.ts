@@ -36,13 +36,20 @@ function timestamp(memory: MemoryUnit): string {
  * fragments and near-identical leading claims; judgement about real-world truth stays with the
  * agent and the repository evidence, so nothing here retires a memory on its own.
  */
+/** Only world and experience facts can be curated; observations are derived and read-only. */
+export function curatable(memory: MemoryUnit): boolean {
+  return memory.fact_type === "world" || memory.fact_type === "experience"
+}
+
 export function scan(memories: MemoryUnit[], options: { minTextLength?: number } = {}): Finding[] {
   const minTextLength = options.minTextLength ?? 40
   const valid = memories.filter((memory) => (memory.state ?? "valid") === "valid")
+  // Retirement candidates must be curatable, so a duplicate never targets a derived observation.
+  const curatableValid = valid.filter(curatable)
   const findings: Finding[] = []
 
   const byText = new Map<string, MemoryUnit[]>()
-  for (const memory of valid) {
+  for (const memory of curatableValid) {
     const key = strictKey(memory.text)
     if (!key) continue
     byText.set(key, [...(byText.get(key) ?? []), memory])

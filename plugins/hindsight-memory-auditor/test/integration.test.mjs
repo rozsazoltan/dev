@@ -52,9 +52,9 @@ async function server(memories) {
 
 test("end to end: scan the fake bank, approve one operation, verify the state", async () => {
   const { client, close } = await server([
-    { id: "a", text: "The preset pins commit 305e335.", state: "valid", updated_at: "2026-11-20T00:00:00Z" },
-    { id: "b", text: "The preset pins commit 305e335.", state: "valid", updated_at: "2026-11-26T00:00:00Z" },
-    { id: "c", text: "A third, unrelated memory about the bank layout.", state: "valid" },
+    { id: "a", text: "The preset pins commit 305e335.", state: "valid", fact_type: "world", updated_at: "2026-11-20T00:00:00Z" },
+    { id: "b", text: "The preset pins commit 305e335.", state: "valid", fact_type: "world", updated_at: "2026-11-26T00:00:00Z" },
+    { id: "c", text: "A third, unrelated memory about the bank layout.", state: "valid", fact_type: "world" },
   ])
   try {
     const inventory = await client.inventory()

@@ -68,7 +68,7 @@ export class HindsightClient {
   }
 
   /** Retains one fact written by the auditor; the body is ignored like every mutation. */
-  async retain(item: { content: string; context?: string; documentId: string; metadata?: Record<string, unknown> }): Promise<void> {
+  async retain(item: { content: string; context?: string; documentId: string; metadata?: Record<string, string> }): Promise<void> {
     await this.#send("POST", "/memories", {
       items: [
         {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { buildPlan, normalize, scan } from "../src/audit.ts"
 
-const memory = (id, text, extra = {}) => ({ id, text, state: "valid", ...extra })
+const memory = (id, text, extra = {}) => ({ id, text, state: "valid", fact_type: "world", ...extra })
 
 test("normalize ignores case, punctuation and spacing", () => {
   assert.equal(normalize("Bank:  Coding-Agent::Dev!"), "bank coding agent dev")

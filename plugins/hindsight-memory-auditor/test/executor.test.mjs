@@ -103,7 +103,7 @@ function mergeClient(overrides = {}) {
       calls.push({ kind: "edit", id, text })
     },
     async byDocument(documentId) {
-      return [{ id: "new", text: "merged", document_id: documentId }]
+      return overrides["__retained"] ?? []
     },
   }
 }
@@ -132,6 +132,17 @@ test("merge retains the new text and retires every source", async () => {
   assert.equal(client.calls[0].item.documentId, "memory-auditor-merge-1")
 })
 
+test("merge resumes when the replacement already exists", async () => {
+  const client = mergeClient({
+    a: { id: "a", text: "text a", state: "invalidated" },
+    __retained: [{ id: "new", text: "merged", state: "valid" }],
+  })
+  const report = await applyPlan(client, mergePlan, ["merge-1"], { auditOnly: false })
+  assert.equal(report.results[0].status, "applied")
+  assert.deepEqual(client.calls.map((call) => call.kind), ["invalidate"])
+  assert.match(report.results[0].detail, /resumed/)
+})
+
 test("merge aborts when a source changed", async () => {
   const client = mergeClient({ b: { id: "b", text: "rewritten", state: "valid" } })
   const report = await applyPlan(client, mergePlan, ["merge-1"], { auditOnly: false })
@@ -149,7 +160,11 @@ test("edit rewrites the text only when the target is unchanged", async () => {
 })
 
 test("verify checks a merge by its retained document and retired sources", async () => {
-  const client = mergeClient({ a: { id: "a", text: "text a", state: "invalidated" }, b: { id: "b", text: "text b", state: "invalidated" } })
+  const client = mergeClient({
+    a: { id: "a", text: "text a", state: "invalidated" },
+    b: { id: "b", text: "text b", state: "invalidated" },
+    __retained: [{ id: "new", text: "merged", state: "valid" }],
+  })
   const report = await verifyPlan(client, mergePlan, ["merge-1"])
   assert.equal(report.results[0].status, "applied")
   assert.match(report.results[0].detail, /sources retired: true/)

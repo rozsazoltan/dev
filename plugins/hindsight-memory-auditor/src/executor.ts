@@ -1,5 +1,5 @@
 import type { HindsightClient } from "./hindsight.ts"
-import type { ApplyReport, Operation, OperationResult, Plan } from "./types.ts"
+import type { ApplyReport, Operation, OperationResult, OperationSource, Plan } from "./types.ts"
 
 /**
  * Applies only the operations the caller approved by ID. Each target and keeper is re-fetched
@@ -83,29 +83,45 @@ async function applyOperation(client: HindsightClient, operation: Operation): Pr
   }
 }
 
-/** Retains the merged text, then retires every source; a changed source aborts the whole operation. */
+/**
+ * Retains the merged text, then retires every source. A retry resumes: when the replacement
+ * already exists, sources that are already invalidated are skipped instead of aborting the whole
+ * operation, and every still-valid source is re-checked before it is retired.
+ */
 async function applyMerge(client: HindsightClient, operation: Operation): Promise<OperationResult> {
   const sources = operation.sources ?? []
   if (sources.length < 2 || !operation.text || !operation.documentId) {
     return { operationId: operation.id, memoryId: operation.memoryId, status: "failed", detail: "Merge needs two sources, a text and a document id." }
   }
+  const alreadyRetained = (await client.byDocument(operation.documentId)).some((memory) => (memory.state ?? "valid") === "valid")
+  const pending: OperationSource[] = []
   for (const source of sources) {
     const current = await client.getMemory(source.id)
-    if ((current.state ?? "valid") !== "valid") {
+    const valid = (current.state ?? "valid") === "valid"
+    if (!valid) {
+      if (alreadyRetained) continue
       return { operationId: operation.id, memoryId: operation.memoryId, status: "skipped", detail: `Source ${source.id} is no longer valid.` }
     }
     if (current.text !== source.text) {
       return { operationId: operation.id, memoryId: operation.memoryId, status: "skipped", detail: `Source ${source.id} changed after the plan was built.` }
     }
+    pending.push(source)
   }
-  await client.retain({
-    content: operation.text,
-    context: operation.context,
-    documentId: operation.documentId,
-    metadata: { source: "memory-auditor", mergeOf: sources.map((source) => source.id) },
-  })
-  for (const source of sources) await client.invalidate(source.id, operation.reason)
-  return { operationId: operation.id, memoryId: operation.memoryId, status: "applied", detail: operation.reason }
+  if (!alreadyRetained) {
+    await client.retain({
+      content: operation.text,
+      context: operation.context,
+      documentId: operation.documentId,
+      metadata: { source: "memory-auditor", mergeOf: sources.map((source) => source.id).join(",") },
+    })
+  }
+  for (const source of pending) await client.invalidate(source.id, operation.reason)
+  return {
+    operationId: operation.id,
+    memoryId: operation.memoryId,
+    status: pending.length > 0 || alreadyRetained ? "applied" : "skipped",
+    detail: alreadyRetained ? `${operation.reason} (resumed)` : operation.reason,
+  }
 }
 
 /** Rewrites one memory in place; the plan carries the exact text and the previous text. */
@@ -180,7 +196,8 @@ async function verifyMerge(client: HindsightClient, operation: Operation): Promi
     const retained = await client.byDocument(operation.documentId ?? "")
     const states = await Promise.all((operation.sources ?? []).map((source) => client.getMemory(source.id)))
     const retired = states.length > 0 && states.every((memory) => (memory.state ?? "valid") !== "valid")
-    const ok = retained.length > 0 && retired
+    const survivor = retained.some((memory) => (memory.state ?? "valid") === "valid")
+    const ok = survivor && retired
     return {
       operationId: operation.id,
       memoryId: operation.memoryId,
