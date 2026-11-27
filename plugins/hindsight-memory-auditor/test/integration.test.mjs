@@ -42,7 +42,12 @@ async function server(memories) {
   })
   await new Promise((resolve) => http.listen(0, "127.0.0.1", resolve))
   const { port } = http.address()
-  return { client: new HindsightClient({ apiUrl: `http://127.0.0.1:${port}`, bank: "bank::test", auditOnly: false, pageSize: 2, maxMemories: 50 }), close: () => http.close() }
+  const apiUrl = `http://127.0.0.1:${port}`
+  return {
+    port,
+    client: new HindsightClient({ apiUrl, bank: "bank::test", auditOnly: false, pageSize: 2, maxMemories: 50 }),
+    close: () => http.close(),
+  }
 }
 
 test("end to end: scan the fake bank, approve one operation, verify the state", async () => {
@@ -70,10 +75,20 @@ test("end to end: scan the fake bank, approve one operation, verify the state", 
   }
 })
 
-test("the client refuses a bank the server does not serve", async () => {
+test("a client scoped to another bank is rejected by the server", async () => {
+  const { port, close } = await server([])
+  try {
+    const other = new HindsightClient({ apiUrl: `http://127.0.0.1:${port}`, bank: "bank::other", auditOnly: false, pageSize: 2, maxMemories: 50 })
+    await assert.rejects(() => other.getMemory("x"), /404.*wrong bank/s)
+  } finally {
+    close()
+  }
+})
+
+test("a missing memory is a 404", async () => {
   const { client, close } = await server([])
   try {
-    await assert.rejects(() => client.getMemory("x"), /404/)
+    await assert.rejects(() => client.getMemory("x"), /404.*missing/s)
   } finally {
     close()
   }

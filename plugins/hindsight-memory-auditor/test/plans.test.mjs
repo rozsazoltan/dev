@@ -58,6 +58,16 @@ test("the store keeps only the last five plans", async () => {
   assert.deepEqual(keys.sort(), ["b", "c", "d", "e", "f"])
 })
 
+test("re-saving a plan refreshes its retention position", async () => {
+  const storage = fakeStorage()
+  const store = new PlanStore(storage)
+  for (const id of ["a", "b", "c", "d", "e"]) await store.save("s", plan(id))
+  await store.save("s", plan("a"))
+  await store.save("s", plan("f"))
+  const keys = Object.keys(storage.data.get("hindsight-memory-auditor.plans.s"))
+  assert.deepEqual(keys.sort(), ["a", "c", "d", "e", "f"])
+})
+
 test("a clear cannot land inside a pending save", async () => {
   const data = new Map()
   let release

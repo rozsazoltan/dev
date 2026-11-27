@@ -24,6 +24,8 @@ export class PlanStore {
   async save(sessionID: string, plan: Plan): Promise<void> {
     await this.#serial(sessionID, async () => {
       const plans = await this.#all(sessionID)
+      // Re-inserting keeps the newest save last in retention order.
+      delete plans[plan.id]
       plans[plan.id] = plan
       const ids = Object.keys(plans)
       for (const stale of ids.slice(0, Math.max(0, ids.length - KEEP))) delete plans[stale]

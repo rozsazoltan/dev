@@ -1,4 +1,4 @@
-import { lstat, readFile } from "node:fs/promises"
+import { lstat, open, realpath } from "node:fs/promises"
 import { isAbsolute, relative, resolve, sep } from "node:path"
 
 export interface EvidenceEntry {
@@ -27,6 +27,14 @@ export function createEvidence(root: string) {
     return target
   }
 
+  /** A symlinked ancestor could point anywhere, so the real path must stay inside the root too. */
+  async function contained(target: string): Promise<string> {
+    const real = await realpath(target)
+    const rel = relative(base, real)
+    if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path resolves outside the project root")
+    return real
+  }
+
   async function inspect(paths: readonly string[]): Promise<EvidenceEntry[]> {
     const entries: EvidenceEntry[] = []
     for (const path of paths.slice(0, 32)) {
@@ -38,12 +46,26 @@ export function createEvidence(root: string) {
           continue
         }
         if (info.isDirectory()) {
+          await contained(target)
           entries.push({ path, exists: true, kind: "directory" })
           continue
         }
-        const head = (await readFile(target)).subarray(0, 8192).toString("utf8")
-        const lead = head.split("\n").find((line) => line.trim() !== "")?.slice(0, 160) ?? ""
-        entries.push({ path, exists: true, kind: "file", bytes: info.size, lead })
+        if (!info.isFile()) {
+          entries.push({ path, exists: true, error: "not a regular file" })
+          continue
+        }
+        const real = await contained(target)
+        // Read a bounded prefix instead of the whole file, and always close the handle.
+        const handle = await open(real, "r")
+        try {
+          const buffer = Buffer.alloc(Math.min(8192, Number(info.size)))
+          const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+          const head = buffer.subarray(0, bytesRead).toString("utf8")
+          const lead = head.split("\n").find((line) => line.trim() !== "")?.slice(0, 160) ?? ""
+          entries.push({ path, exists: true, kind: "file", bytes: info.size, lead })
+        } finally {
+          await handle.close()
+        }
       } catch (error) {
         const code = (error as { code?: string }).code
         entries.push({

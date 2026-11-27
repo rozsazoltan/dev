@@ -34,6 +34,17 @@ test("rejects paths outside the project root", async () => {
   assert.match(entry.error ?? "", /escapes the project root/)
 })
 
+test("rejects a file reached through a symlinked ancestor", async () => {
+  const root = await project()
+  const outside = await mkdtemp(join(tmpdir(), "outside-"))
+  await writeFile(join(outside, "secret.md"), "token line\n")
+  await symlink(outside, join(root, "vendor"))
+  const [entry] = await createEvidence(root).inspect(["vendor/secret.md"])
+  assert.equal(entry.exists, true)
+  assert.match(entry.error ?? "", /resolves outside/)
+  assert.equal(entry.lead, undefined)
+})
+
 test("reports symlinks without following them", async () => {
   const root = await project()
   await symlink("/etc/passwd", join(root, "link.md"))
