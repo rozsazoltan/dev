@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { denyReason } from "../src/guard.ts"
+import { describeBankPresence } from "../src/tools.ts"
 
 test("other agents keep every tool", () => {
   assert.equal(denyReason("build", "shell"), undefined)
@@ -29,4 +30,10 @@ test("the auditor loses writes, commands, delegation and network", () => {
   for (const tool of ["edit", "write", "patch", "shell", "bash", "webfetch", "websearch", "skill"]) {
     assert.match(denyReason("memory-auditor", tool) ?? "", /may not use/, tool)
   }
+})
+
+test("bank presence distinguishes a failed lookup from an empty list", () => {
+  assert.match(describeBankPresence(null, "b"), /unknown/)
+  assert.match(describeBankPresence([], "b"), /^NO/)
+  assert.equal(describeBankPresence(["b"], "b"), "yes")
 })

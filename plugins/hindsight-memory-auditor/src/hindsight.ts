@@ -48,6 +48,13 @@ export class HindsightClient {
     return this.#request<ListResponse>("GET", `/memories/list?${query}`)
   }
 
+  /** Banks the server knows, so a mis-resolved bank is visible before any write. */
+  async banks(): Promise<string[]> {
+    const response = await this.#fetchResponse("GET", "/v1/default/banks", undefined, "/v1/default/banks")
+    const body = (await response.json()) as { banks?: Array<{ bank_id?: string }> }
+    return (body.banks ?? []).map((bank) => bank.bank_id ?? "").filter(Boolean)
+  }
+
   /** Semantic search: ranked by meaning, not by keywords. */
   async recall(query: string, limit: number): Promise<RecallResult[]> {
     const response = await this.#request<{ results?: RecallResult[] }>("POST", "/memories/recall", { query })
@@ -122,11 +129,13 @@ export class HindsightClient {
     await response.body?.cancel().catch(() => undefined)
   }
 
-  async #fetchResponse(method: string, path: string, body?: unknown): Promise<Response> {
+  async #fetchResponse(method: string, path: string, body?: unknown, pathOverride?: string): Promise<Response> {
     const headers: Record<string, string> = { accept: "application/json" }
     if (body !== undefined) headers["content-type"] = "application/json"
     if (this.#config.token) headers.authorization = `Bearer ${this.#config.token}`
-    const response = await this.#fetch(`${this.#config.apiUrl}/v1/default/banks/${encodeURIComponent(this.#config.bank)}${path}`, {
+    const base = pathOverride === undefined ? `/v1/default/banks/${encodeURIComponent(this.#config.bank)}` : ""
+    const target = pathOverride === undefined ? `${base}${path}` : pathOverride
+    const response = await this.#fetch(`${this.#config.apiUrl}${target}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),

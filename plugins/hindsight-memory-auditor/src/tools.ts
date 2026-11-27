@@ -6,6 +6,12 @@ import type { PlanStore } from "./plans.ts"
 import type { AuditorConfig, Finding, Inventory } from "./types.ts"
 
 /** Audits are per session: one conversation never reads or clears another's findings. */
+/** `null` means the lookup failed; an empty list means the server really has no banks. */
+export function describeBankPresence(banks: string[] | null, bank: string): string {
+  if (banks === null) return "unknown (bank list unavailable)"
+  return banks.includes(bank) ? "yes" : "NO — check the bank id or the integration template"
+}
+
 export interface SessionState {
   inventory?: Inventory
   findings?: Finding[]
@@ -50,9 +56,11 @@ export function createTools(
         "Report the Memory Auditor scope: selected Hindsight bank, server, audit-only flag, and what the current session can change.",
       input: object({}),
       async execute() {
+        const banks = await client.banks().catch((): null => null)
+        const present = describeBankPresence(banks, client.bank)
         return {
           content: [
-            `bank: ${client.bank}`,
+            `bank: ${client.bank} (exists on server: ${present})`,
             `server: ${new URL(config.apiUrl).host}`,
             `auditOnly: ${config.auditOnly}`,
             `pageSize: ${config.pageSize}`,

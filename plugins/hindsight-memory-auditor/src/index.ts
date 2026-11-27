@@ -1,3 +1,4 @@
+import { basename } from "node:path"
 import { Plugin } from "@opencode/plugin"
 import { resolveConfig } from "./config.ts"
 import type { VcsLike } from "./evidence.ts"
@@ -13,12 +14,13 @@ import { createTools, type SessionState } from "./tools.ts"
 export default Plugin.define({
   id: "rozsazoltan.opencode-hindsight-memory-auditor",
   async setup(ctx) {
-    const config = resolveConfig(ctx.options)
+    const root = ctx.location.project.canonical || ctx.location.directory
+    // The integration names banks after the project directory (`{gitProject}`).
+    const config = resolveConfig(ctx.options, process.env, basename(root))
     const client = new HindsightClient(config)
     // One plugin instance serves every session at this location, so state is keyed by session.
     const sessions = new Map<string, SessionState>()
     const plans = new PlanStore(ctx.storage)
-    const root = ctx.location.project.canonical || ctx.location.directory
 
     await ctx.tool.transform((editor) => {
       for (const tool of createTools(client, config, sessions, root, plans, ctx.vcs as unknown as VcsLike)) editor.add(tool)
