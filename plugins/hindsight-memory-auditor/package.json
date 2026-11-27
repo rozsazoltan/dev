@@ -1,0 +1,35 @@
+{
+  "name": "@rozsazoltan/opencode-hindsight-memory-auditor",
+  "version": "0.1.0",
+  "description": "OpenCode V2 plugin and primary agent that audits and safely maintains one Hindsight memory bank.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "agent",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "hindsight",
+    "memory",
+    "audit"
+  ]
+}

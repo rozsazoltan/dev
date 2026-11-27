@@ -1,0 +1,118 @@
+import type { HindsightClient } from "./hindsight.ts"
+import type { ApplyReport, Operation, OperationResult, Plan } from "./types.ts"
+
+/**
+ * Applies only the operations the caller approved by ID. Each target and keeper is re-fetched
+ * first, so a changed memory is skipped instead of overwritten.
+ *
+ * Limitation: Hindsight exposes no versioned precondition, so this is a check-then-write and not a
+ * transactional guard. A concurrent writer that changes a keeper between the read and the PATCH is
+ * not detected; `restore` is the recovery path.
+ */
+export async function applyPlan(
+  client: HindsightClient,
+  plan: Plan,
+  approvedOperationIds: readonly string[],
+  options: { auditOnly: boolean },
+): Promise<ApplyReport> {
+  if (plan.bank !== client.bank) {
+    throw new Error(`Plan ${plan.id} belongs to bank ${plan.bank}, but this session is scoped to ${client.bank}`)
+  }
+  if (options.auditOnly) {
+    throw new Error("Audit-only mode is on: nothing was applied. Set the plugin option `auditOnly: false` to allow approved corrections.")
+  }
+  const approved = new Set(approvedOperationIds)
+  const results: OperationResult[] = []
+  for (const operation of plan.operations) {
+    if (!approved.has(operation.id)) continue
+    results.push(await applyOperation(client, operation))
+  }
+  const missing = [...approved].filter((id) => !plan.operations.some((operation) => operation.id === id))
+  for (const id of missing) {
+    results.push({ operationId: id, memoryId: "", status: "failed", detail: "Operation is not part of this plan." })
+  }
+  return { planId: plan.id, bank: plan.bank, results }
+}
+
+async function applyOperation(client: HindsightClient, operation: Operation): Promise<OperationResult> {
+  try {
+    if (operation.keep) {
+      const keeper = await client.getMemory(operation.keep)
+      if ((keeper.state ?? "valid") !== "valid") {
+        return {
+          operationId: operation.id,
+          memoryId: operation.memoryId,
+          status: "skipped",
+          detail: "The duplicate keeper is no longer valid; keeping the target would preserve the fact.",
+        }
+      }
+      if (keeper.text !== operation.keepBefore) {
+        return {
+          operationId: operation.id,
+          memoryId: operation.memoryId,
+          status: "skipped",
+          detail: "The duplicate keeper changed after the plan was built; rebuild the plan.",
+        }
+      }
+    }
+    const current = await client.getMemory(operation.memoryId)
+    if (current.state === "invalidated") {
+      return { operationId: operation.id, memoryId: operation.memoryId, status: "skipped", detail: "Already invalidated." }
+    }
+    if (current.text !== operation.before) {
+      return {
+        operationId: operation.id,
+        memoryId: operation.memoryId,
+        status: "skipped",
+        detail: "Memory text changed after the plan was built; rebuild the plan.",
+      }
+    }
+    await (operation.kind === "restore"
+      ? client.restore(operation.memoryId, operation.reason)
+      : client.invalidate(operation.memoryId, operation.reason))
+    return { operationId: operation.id, memoryId: operation.memoryId, status: "applied", detail: operation.reason }
+  } catch (error) {
+    return {
+      operationId: operation.id,
+      memoryId: operation.memoryId,
+      status: "failed",
+      detail: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+/** Reads every affected memory back and reports the observed state. */
+export async function verifyPlan(client: HindsightClient, plan: Plan, operationIds: readonly string[]): Promise<ApplyReport> {
+  if (plan.bank !== client.bank) {
+    throw new Error(`Plan ${plan.id} belongs to bank ${plan.bank}, but this session is scoped to ${client.bank}`)
+  }
+  const approved = new Set(operationIds)
+  const results: OperationResult[] = []
+  const known = new Set(plan.operations.map((operation) => operation.id))
+  for (const id of approved) {
+    if (known.has(id)) continue
+    results.push({ operationId: id, memoryId: "", status: "unverified", detail: "Operation is not part of this plan." })
+  }
+  for (const operation of plan.operations) {
+    if (!approved.has(operation.id)) continue
+    const expected = operation.kind === "restore" ? "valid" : "invalidated"
+    try {
+      const memory = await client.getMemory(operation.memoryId)
+      const state = memory.state ?? "valid"
+      results.push({
+        operationId: operation.id,
+        memoryId: operation.memoryId,
+        status: state === expected ? "applied" : "unverified",
+        detail: `Observed state: ${state}; expected ${expected}.`,
+      })
+    } catch (error) {
+      results.push({
+        operationId: operation.id,
+        memoryId: operation.memoryId,
+        status: "unverified",
+        detail: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return { planId: plan.id, bank: plan.bank, results }
+}

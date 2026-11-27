@@ -51,6 +51,7 @@ To get the Desktop CLI in PowerShell, dot-source [`scripts/opencode-desktop.ps1`
 ## Plugins
 
 - [`@rozsazoltan/opencode-instructions`](plugins/opencode-instructions/README.md)
+- [`@rozsazoltan/opencode-hindsight-memory-auditor`](plugins/hindsight-memory-auditor/README.md)
 
 ## Skills
 
