@@ -274,7 +274,8 @@ export function createTools(
       input: object({ planId: { type: "string" }, findingIds: { type: "array", items: { type: "string" } } }),
       async execute(input: unknown, context?: ToolContext) {
         const { id, state } = session(context)
-        const planId = readOptionalString(input, "planId") ?? state.planId
+        // Only an explicit planId means "show that stored plan"; a new preview must build from findings.
+        const planId = readOptionalString(input, "planId")
         if (planId) {
           const existing = await plans.load(id, planId)
           if (!existing) throw new Error("No immutable plan with that ID exists in this session.")

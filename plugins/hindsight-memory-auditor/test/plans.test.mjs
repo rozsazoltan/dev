@@ -89,6 +89,16 @@ test("JSON storage preserves full plan integrity and input/output snapshots are 
   assert.equal((await store.load("s", id)).operations[0].text, "new")
 })
 
+test("a valid plan stored under another key is not returned", async () => {
+  const storage = fakeStorage()
+  const store = new PlanStore(storage)
+  const stored = plan("real")
+  await store.save("s", stored)
+  const data = storage.data.get("hindsight-memory-auditor.plans.s")
+  storage.data.set("hindsight-memory-auditor.plans.s", { "wrong-key": data[stored.id] })
+  assert.equal(await store.load("s", "wrong-key"), undefined)
+})
+
 test("a clear cannot land inside a pending save", async () => {
   const data = new Map()
   let release

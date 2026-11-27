@@ -105,6 +105,8 @@ export class NativeApproval {
       call.signal.addEventListener("abort", abort, { once: true })
       if (call.signal.aborted) abort()
     })
+    // Pending forever on success, rejects as soon as the receipt stream fails.
+    const receiptFailure = new Promise<never>((_, fail) => { receipt.catch(fail) })
     try {
       await Promise.race([this.#ctx.permission.assert({
         sessionID: call.sessionID,
@@ -119,7 +121,7 @@ export class NativeApproval {
           operationIds: binding.operationIds,
           summary: binding.summary,
         },
-      }), cancelled])
+      }), cancelled, receiptFailure])
       const missingReceipt = new Promise<never>((_, fail) => {
         timer = setTimeout(() => fail(new Error("No correlated once-only approval receipt; no write is authorized.")), 1000)
       })

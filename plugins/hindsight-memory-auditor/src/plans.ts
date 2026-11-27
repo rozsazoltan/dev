@@ -34,7 +34,8 @@ export class PlanStore {
 
   async load(sessionID: string, id: string): Promise<Plan | undefined> {
     const plan = (await this.#all(sessionID))[id]
-    return plan && validatePlan(plan) ? structuredClone(plan) : undefined
+    // A valid plan under another key is not the plan that was requested.
+    return plan && plan.id === id && validatePlan(plan) ? structuredClone(plan) : undefined
   }
 
   async clear(sessionID: string): Promise<void> {

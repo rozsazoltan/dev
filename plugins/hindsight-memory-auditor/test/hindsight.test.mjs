@@ -140,6 +140,15 @@ test("a bearer token is refused over non-loopback http", () => {
   assert.equal(resolveConfig({ apiUrl: "https://hindsight.example", bank: "b", token: "t" }, {}).token, "t")
 })
 
+test("a contradictory total at the safety cap is not reported complete", async () => {
+  const many = [{ id: "a", text: "one" }, { id: "b", text: "two" }]
+  const client = new HindsightClient({ ...config, maxMemories: 2 }, fakeFetch({ "*": () => [200, { items: many, total: 1 }] }))
+  const inventory = await client.inventory()
+  assert.equal(inventory.scanned, 2)
+  assert.equal(inventory.changed, true)
+  assert.equal(inventory.complete, false)
+})
+
 test("assertBank refuses a different bank", () => {
   assert.equal(assertBank("b", "b"), "b")
   assert.throws(() => assertBank("b", "other"), /Refusing to touch bank other/)

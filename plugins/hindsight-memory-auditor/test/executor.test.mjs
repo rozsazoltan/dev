@@ -246,6 +246,21 @@ test("missing or unrelated retained replacement never retires merge sources", as
   }
 })
 
+test("a duplicate replacement stops further source retirement", async () => {
+  const client = mergeClient()
+  const invalidate = client.invalidate
+  const byDocument = client.byDocument
+  let duplicated = false
+  client.invalidate = async (id, reason) => { await invalidate(id, reason); duplicated = true }
+  client.byDocument = async (id) => {
+    const current = await byDocument(id)
+    return duplicated ? [...current, { ...current[0], id: "second-copy" }] : current
+  }
+  const result = await applyPlan(client, mergePlan, ["merge-1"])
+  assert.equal(result.results[0].status, "unverified")
+  assert.equal((await client.getMemory("b")).state, "valid")
+})
+
 test("preexisting merge document blocks every selected operation before writes", async () => {
   const client = mergeClient({ __retained: [fact("new", "merged fact", { document_id: mergeOperation.documentId })] })
   const report = await applyPlan(client, mergePlan, ["merge-1"])
@@ -273,7 +288,22 @@ test("verification rejects unrelated replacement, altered keeper and tampered pl
   assert.equal((await verifyPlan(merged, mergePlan, ["merge-1"])).results[0].status, "unverified")
   const guarded = packPlan("bank", [], [{ ...plan.operations[0], keep: "keeper", keepBefore: "same text", keeperSnapshot: fact("keeper") }])
   assert.equal((await verifyPlan(fakeClient({ a: fact("a", "same text", { state: "invalidated" }), keeper: fact("keeper", "changed") }), guarded, ["invalidate-a"])).results[0].status, "unverified")
-  await assert.rejects(verifyPlan(fakeClient(), { ...plan, bank: "changed" }, ["invalidate-a"]))
+  const tampered = structuredClone(plan)
+  tampered.operations[0].reason = "tampered after approval"
+  await assert.rejects(verifyPlan(fakeClient(), tampered, ["invalidate-a"]), /Plan integrity check failed/)
+})
+
+test("cancellation after a write keeps the completed report and skips the rest", async () => {
+  const controller = new AbortController()
+  const client = fakeClient()
+  const invalidate = client.invalidate
+  client.invalidate = async (id, reason) => { await invalidate(id, reason); controller.abort() }
+  const report = await applyPlan(client, packPlan("bank", [], [
+    { ...plan.operations[0], keep: undefined, keepBefore: undefined, keeperSnapshot: undefined },
+    { ...plan.operations[1], keep: undefined, keepBefore: undefined, keeperSnapshot: undefined },
+  ]), ["invalidate-a", "invalidate-b"], { signal: controller.signal })
+  assert.deepEqual(report.results.map((result) => result.status), ["applied", "skipped"])
+  assert.deepEqual(client.calls.map((call) => call.id), ["a"])
 })
 
 test("replacement loss during the final source retirement is never reported applied", async () => {

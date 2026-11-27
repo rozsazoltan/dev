@@ -79,7 +79,13 @@ export async function applyPlan(
   const results: OperationResult[] = []
   for (const operation of plan.operations) {
     if (!approved.has(operation.id)) continue
-    checkAbort(options.signal)
+    if (options.signal?.aborted) {
+      // Work already happened: keep its results and report the rest as skipped.
+      for (const remaining of selected.slice(results.length)) results.push({
+        operationId: remaining.id, memoryId: remaining.memoryId, status: "skipped", detail: "Cancelled before this operation was attempted.",
+      })
+      break
+    }
     const result = await applyOperation(client, operation, options.signal)
     results.push(result)
     if (result.status !== "applied") {
@@ -197,8 +203,10 @@ async function applyMerge(client: HindsightClient, operation: Operation, signal?
     if (replacement.length !== 1) return { operationId: operation.id, memoryId: operation.memoryId, status: "unverified", detail: "Approved replacement was not uniquely verified; sources remain valid." }
     for (const source of sources) {
       checkAbort(signal)
-      if (!(await client.byDocument(operation.documentId)).some((memory) => memory.id === replacement[0]!.id && exactReplacement(memory, operation))) {
-        return { operationId: operation.id, memoryId: operation.memoryId, status: "unverified", detail: "Replacement changed; no further sources retired." }
+      const document = await client.byDocument(operation.documentId)
+      const matches = document.filter((memory) => exactReplacement(memory, operation))
+      if (matches.length !== 1 || matches[0]!.id !== replacement[0]!.id) {
+        return { operationId: operation.id, memoryId: operation.memoryId, status: "unverified", detail: "Replacement changed or is no longer unique; no further sources retired." }
       }
       const current = await client.getMemory(source.id)
       if (current.state !== "valid" || current.text !== source.text || !curatable(current) || !snapshotMatches(source.snapshot, current)) return { operationId: operation.id, memoryId: operation.memoryId, status: "unverified", detail: `Source ${source.id} changed; no further sources retired.` }
@@ -290,9 +298,10 @@ export async function verifyPlan(client: HindsightClient, plan: Plan, operationI
 /** A merge is verified by its retained document and the retirement of every source. */
 async function verifyMerge(client: HindsightClient, operation: Operation, expectedReplacementId?: string): Promise<OperationResult> {
   try {
-    const retained = await client.byDocument(operation.documentId ?? "")
+    // Sources first, replacement last: the replacement check is the final observation.
     const states = await Promise.all((operation.sources ?? []).map((source) => client.getMemory(source.id)))
     const retired = states.length >= 2 && states.every((memory, index) => memory.state === "invalidated" && curatable(memory) && snapshotMatches(operation.sources?.[index]?.snapshot, memory, { state: "invalidated" }))
+    const retained = await client.byDocument(operation.documentId ?? "")
     const matches = retained.filter((memory) => exactReplacement(memory, operation))
     const survivor = matches.length === 1 && (!expectedReplacementId || matches[0]!.id === expectedReplacementId)
     const ok = survivor && retired

@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { NativeApproval, APPLY_ACTION } from "../src/approval.ts"
 
-function host({ effect = "allow", reply = "once", events = true, reject = false, mutateAsked, mutateReply } = {}) {
+function host({ effect = "allow", reply = "once", events = true, reject = false, mutateAsked, mutateReply, streamError = false } = {}) {
   let evaluate
   let push
   const calls = []
@@ -29,6 +29,7 @@ function host({ effect = "allow", reply = "once", events = true, reject = false,
     },
     event: {
       async *subscribe({ signal }) {
+        if (streamError) throw new Error("stream closed")
         const queue = []
         let wake
         push = (event) => { queue.push(event); wake?.() }
@@ -105,4 +106,11 @@ test("cancelling an outstanding native prompt returns without authorization", as
   const pending = gate.confirm(binding, { ...call(), signal: controller.signal })
   controller.abort()
   await assert.rejects(pending, /cancelled/)
+})
+
+test("a failed receipt stream ends the attempt instead of leaving it pending", async () => {
+  const fake = host({ streamError: true })
+  fake.ctx.permission.assert = async () => new Promise(() => {})
+  const gate = await NativeApproval.create(fake.ctx)
+  await assert.rejects(gate.confirm(binding, call()), /events are unavailable/)
 })

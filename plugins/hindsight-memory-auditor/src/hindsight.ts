@@ -200,6 +200,8 @@ export class HindsightClient {
         return { items: [...byId.values()], truncated: false, changed }
       }
       if (offset >= this.#config.maxMemories) {
+        // A total below what was already observed is contradictory, not complete coverage.
+        if (total !== undefined && total < byId.size) changed = true
         return { items: [...byId.values()], truncated: total === undefined || total > offset, changed }
       }
     }

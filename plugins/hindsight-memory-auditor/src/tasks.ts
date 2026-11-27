@@ -201,7 +201,7 @@ export class AuditTasks {
     }
     if (tool === "memory_auditor_recall") return task.allowRecall
     if (tool === "memory_auditor_git") return task.allowGit
-    const paths = tool === "memory_auditor_evidence" ? value.paths : [value.path]
+    const paths = tool === "memory_auditor_evidence" ? value.paths : [tool === "read" ? value.filePath : value.path]
     if (!["read", "glob", "grep", "memory_auditor_evidence"].includes(tool) || !Array.isArray(paths) || !paths.length) return false
     try {
       for (const path of paths) {
@@ -253,11 +253,15 @@ function validateRows(task: Assignment, rows: TaskRow[], run: AuditRun): void {
         !["VERIFIED", "HISTORICAL", "OUTDATED", "INCORRECT", "CONTRADICTORY", "DUPLICATE", "UNVERIFIED", "STALE_DERIVED", "LOW_SIGNAL"].includes(row.verdict) ||
         !["high", "medium", "low"].includes(row.confidence) ||
         !["keep", "invalidate", "restore", "edit", "merge", "investigate"].includes(row.action) ||
-        ![row.claim, row.evidence, row.reason].every((value) => typeof value === "string" && value.trim())) {
+        ![row.evidence, row.reason].every((value) => typeof value === "string" && value.trim())) {
       throw new Error("Invalid, out-of-scope or unsupported worker result.")
     }
     const target = run.inventory.memories.find((memory) => memory.id === row.memoryId)!
-    if (!target.text.includes(row.claim)) throw new Error("The quoted claim must occur in the assigned memory snapshot.")
+    const blank = !target.text.trim()
+    if (!blank && (typeof row.claim !== "string" || !row.claim.trim())) {
+      throw new Error("A quoted claim is required for a nonblank memory.")
+    }
+    if (!blank && !target.text.includes(row.claim)) throw new Error("The quoted claim must occur in the assigned memory snapshot.")
     const issueVerdicts: Record<Check, string[]> = {
       "tool-log": ["LOW_SIGNAL"], "plan-artifact": ["LOW_SIGNAL"], "agent-meta": ["LOW_SIGNAL"],
       "stale-current": ["OUTDATED", "INCORRECT"], duplicate: ["DUPLICATE"], fragment: ["LOW_SIGNAL"],

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { mkdtemp, writeFile, symlink, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { AuditTasks } from "../src/tasks.ts"
 import { createTools } from "../src/tools.ts"
@@ -20,7 +21,7 @@ const context = (agent = "memory-auditor", sessionID = "primary") => ({
 })
 
 async function fixture(t) {
-  const root = await mkdtemp("/tmp/opencode/auditor-task-")
+  const root = await mkdtemp(join(tmpdir(), "auditor-task-"))
   t.after(() => rm(root, { recursive: true, force: true }))
   const state = new Map()
   const storage = { get: async (key) => state.get(key), set: async (key, value) => state.set(key, JSON.parse(JSON.stringify(value))) }
@@ -90,9 +91,10 @@ test("worker reads stay within target/reference IDs and granted real repository 
   const task = await f.tasks.assign("primary", { ...assignment, evidencePaths: ["allowed.md"] })
   assert.equal(await f.tasks.workerReadAllowed(task, "memory_auditor_inspect", { memoryId: "b" }), true)
   assert.equal(await f.tasks.workerReadAllowed(task, "memory_auditor_inspect", { memoryId: "outside" }), false)
-  assert.equal(await f.tasks.workerReadAllowed(task, "read", { path: join(f.root, "allowed.md") }), true)
+  assert.equal(await f.tasks.workerReadAllowed(task, "read", { filePath: join(f.root, "allowed.md") }), true)
+  assert.equal(await f.tasks.workerReadAllowed(task, "read", { path: join(f.root, "allowed.md") }), false, "native read uses filePath")
   for (const path of ["other.md", "escape", "/etc/passwd"]) {
-    assert.equal(await f.tasks.workerReadAllowed(task, "read", { path }), false)
+    assert.equal(await f.tasks.workerReadAllowed(task, "read", { filePath: path }), false)
   }
   for (const tool of ["memory_auditor_apply", "memory_auditor_propose", "memory_auditor_inventory", "subagent", "execute", "memory_auditor_recall", "memory_auditor_git"]) {
     assert.equal(await f.tasks.workerReadAllowed(task, tool, {}), false)
@@ -155,6 +157,16 @@ test("bound worker cannot gain writes by claiming the primary agent identity", a
     const tool = tools.find((tool) => tool.name === `memory_auditor_${name}`)
     await assert.rejects(tool.execute({}, context("memory-auditor", task.childSessionID)), /outside/)
   }
+})
+
+test("blank memory snapshots accept a blocked result without a quote", async (t) => {
+  const f = await fixture(t)
+  await f.tasks.start("primary", { ...inventory, memories: [fact("a", { text: "   " }), fact("b")] }, ["fragment"])
+  const task = await f.tasks.assign("primary", assignment)
+  await f.tasks.submit(task.childSessionID, task.id, [row("a", { claim: "", status: "blocked", verdict: "UNVERIFIED", action: "investigate", reason: "The memory has no text to inspect." })])
+  assert.equal((await f.tasks.report("primary")).coverage[0].blocked, 1)
+  const next = await f.tasks.assign("primary", { ...assignment, memoryIds: ["b"], referenceIds: [] })
+  await assert.rejects(f.tasks.submit(next.childSessionID, next.id, [row("b", { claim: "" })]), /quoted claim/)
 })
 
 test("accepted worker findings produce a deterministic escaped Markdown table", async (t) => {

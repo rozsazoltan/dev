@@ -81,6 +81,20 @@ test("duplicate identity ignores updated_at but honors semantic date", () => {
   assert.equal(scan([base, { ...newer, source_memories: [{ id: "different-source" }] }]).some((finding) => finding.state === "DUPLICATE"), false)
 })
 
+test("blank fact text is never grouped as a duplicate", () => {
+  const memories = [memory("a", "   "), memory("b", "   ")]
+  assert.equal(scan(memories).some((finding) => finding.state === "DUPLICATE"), false)
+})
+
+test("keeper ordering compares parsed instants with a deterministic fallback", () => {
+  const memories = [
+    memory("offset", "Same fact text for keeper ordering here.", { updated_at: "2026-11-27T02:00:00+03:00" }),
+    memory("utc", "Same fact text for keeper ordering here.", { updated_at: "2026-11-27T00:00:00Z" }),
+    memory("missing", "Same fact text for keeper ordering here."),
+  ]
+  assert.equal(scan(memories).find((finding) => finding.state === "DUPLICATE")?.keep, "utc")
+})
+
 test("plan integrity binds keeper and context with canonical key ordering", () => {
   const a = packPlan("b", [], [{ id: "op", kind: "edit", memoryId: "m", reason: "r", before: "x", text: "y", context: "a" }])
   const changed = structuredClone(a)

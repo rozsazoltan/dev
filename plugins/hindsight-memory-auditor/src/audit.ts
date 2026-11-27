@@ -35,6 +35,15 @@ function keeperTimestamp(memory: MemoryUnit): string {
   return memory.updated_at ?? timestamp(memory)
 }
 
+/** Orders keepers by parsed instant; unparseable values sort last and ties break on ID. */
+function keeperOrder(left: MemoryUnit, right: MemoryUnit): number {
+  const leftAt = Date.parse(keeperTimestamp(left))
+  const rightAt = Date.parse(keeperTimestamp(right))
+  const a = Number.isNaN(leftAt) ? Number.NEGATIVE_INFINITY : leftAt
+  const b = Number.isNaN(rightAt) ? Number.NEGATIVE_INFINITY : rightAt
+  return b - a || left.id.localeCompare(right.id)
+}
+
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map((item) => canonical(item ?? null)).join(",")}]`
   if (value && typeof value === "object") {
@@ -72,6 +81,8 @@ export function scan(memories: MemoryUnit[], options: { minTextLength?: number }
 
   const byText = new Map<string, MemoryUnit[]>()
   for (const memory of curatableValid) {
+    // A blank fact cannot be a duplicate: two empty texts say nothing.
+    if (!strictKey(memory.text)) continue
     const key = canonical([strictKey(memory.text), memory.fact_type ?? memory.type, memory.context ?? null,
       memory.tags ?? null, memory.mentioned_at ?? null, memory.date ?? null, memory.document_id ?? null,
       memory.source_memory_ids ?? null, memory.source_memories ?? null, memory.observation_scopes ?? null, memory.metadata ?? null])
@@ -80,7 +91,7 @@ export function scan(memories: MemoryUnit[], options: { minTextLength?: number }
   }
   for (const [key, group] of byText) {
     if (group.length < 2) continue
-    const ordered = [...group].sort((left, right) => keeperTimestamp(right).localeCompare(keeperTimestamp(left)))
+    const ordered = [...group].sort(keeperOrder)
     findings.push({
       id: `dup-${digest(key).slice(0, 12)}`,
       state: "DUPLICATE",
