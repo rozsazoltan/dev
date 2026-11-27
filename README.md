@@ -70,6 +70,7 @@ apm install rozsazoltan/dev/presets/gsap --target opencode
 apm install rozsazoltan/dev/presets/laravel --target opencode
 apm install rozsazoltan/dev/presets/rust --target opencode
 apm install rozsazoltan/dev/presets/tauri --target opencode
+apm install rozsazoltan/dev/presets/marketing --target opencode
 ```
 
 | Preset | Skills |
@@ -83,6 +84,7 @@ apm install rozsazoltan/dev/presets/tauri --target opencode
 | `php` / `laravel` | Pest 4 only; no general PHP or Laravel skill picked yet |
 | `rust` / `tauri` | Apollo Rust best practices; no Cargo or Tauri skill picked yet |
 | `oxc-migration` | migrate-oxlint, migrate-oxfmt, for migration work |
+| `marketing` | 20 marketing subagents from `rozsazoltan/primitives`: SEO, content, ecommerce, social media |
 
 Presets stay self-contained, so dependencies may overlap. APM deduplicates them and pins the result in the consuming project's `apm.lock.yaml`. Updating a preset here does not update projects that already installed it; run `apm update` there.
 
