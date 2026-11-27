@@ -18,8 +18,15 @@ test("qualified tool names still match the allowlist", () => {
   assert.match(denyReason("memory-auditor", "hindsight-memory-auditor.shell") ?? "", /may not use/)
 })
 
+test("the auditor may launch only its worker subagent", () => {
+  assert.equal(denyReason("memory-auditor", "subagent", { agent: "memory-auditor-worker" }), undefined)
+  assert.match(denyReason("memory-auditor", "subagent", { agent: "build" }) ?? "", /only launch/)
+  assert.match(denyReason("memory-auditor", "subagent") ?? "", /only launch/)
+  assert.equal(denyReason("build", "subagent", { agent: "build" }), undefined)
+})
+
 test("the auditor loses writes, commands, delegation and network", () => {
-  for (const tool of ["edit", "write", "patch", "shell", "bash", "task", "subagent", "webfetch", "websearch", "skill"]) {
+  for (const tool of ["edit", "write", "patch", "shell", "bash", "webfetch", "websearch", "skill"]) {
     assert.match(denyReason("memory-auditor", tool) ?? "", /may not use/, tool)
   }
 })

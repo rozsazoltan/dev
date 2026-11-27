@@ -136,6 +136,45 @@ export function createTools(
       },
     },
     {
+      name: "memory_auditor_recall",
+      description:
+        "Semantic search inside the bank: ranked by meaning, not keywords. Use it to find related memories for a finding instead of scanning text.",
+      input: object({ query: { type: "string" }, limit: { type: "number" } }, ["query"]),
+      async execute(input: unknown) {
+        const query = readString(input, "query")
+        const limit = readNumber(input, "limit", 10, 50)
+        const results = await client.recall(query, limit)
+        return {
+          content: [
+            `query: ${query} (${results.length} results)`,
+            ...results.map(
+              (result) =>
+                `- ${result.id} [${result.type ?? "unknown"}${result.scores?.final !== undefined ? `, score ${result.scores.final.toFixed(2)}` : ""}] ${excerpt(result.text)}`,
+            ),
+          ].join("\n"),
+        }
+      },
+    },
+    {
+      name: "memory_auditor_entities",
+      description:
+        "List the entities the bank tracks with their mention counts, so conflicting or outdated facts can be grouped by subject instead of by wording.",
+      input: object({ limit: { type: "number" }, offset: { type: "number" } }),
+      async execute(input: unknown) {
+        const limit = readNumber(input, "limit", 50, 200)
+        const offset = readNumber(input, "offset", 0, 100000)
+        const page = await client.entities({ limit, offset })
+        return {
+          content: [
+            `entities: ${page.items.length} of ${page.total} (offset ${offset})`,
+            ...page.items.map(
+              (entity) => `- ${entity.canonical_name} (${entity.mention_count} mentions, ${entity.id})`,
+            ),
+          ].join("\n"),
+        }
+      },
+    },
+    {
       name: "memory_auditor_preview",
       description:
         "Build a typed plan from this session's last scan. Optional findingIds narrow it to selected findings. Returns operation IDs; nothing is applied.",
@@ -223,6 +262,12 @@ function readOptionalString(input: unknown, key: string): string | undefined {
   if (typeof input !== "object" || input === null) return undefined
   const value = (input as Record<string, unknown>)[key]
   return typeof value === "string" && value.trim() !== "" ? value : undefined
+}
+
+function readNumber(input: unknown, key: string, fallback: number, maximum: number): number {
+  if (typeof input !== "object" || input === null) return fallback
+  const value = (input as Record<string, unknown>)[key]
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= maximum ? value : fallback
 }
 
 function readStrings(input: unknown, key: string): string[] {

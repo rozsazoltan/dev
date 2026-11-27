@@ -25,7 +25,7 @@ export default Plugin.define({
     })
 
     await ctx.tool.hook("execute.before", (input) => {
-      const reason = denyReason(input.agent, input.tool)
+      const reason = denyReason(input.agent, input.tool, input.input)
       if (reason) throw new Error(reason)
     })
   },

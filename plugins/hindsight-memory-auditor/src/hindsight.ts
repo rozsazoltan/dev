@@ -2,6 +2,24 @@ import type { AuditorConfig, Inventory, MemoryUnit } from "./types.ts"
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
+export interface RecallResult {
+  id: string
+  text: string
+  type?: string | null
+  entities?: string[] | null
+  document_id?: string | null
+  mentioned_at?: string | null
+  scores?: { final?: number; semantic?: number | null } | null
+}
+
+export interface EntitySummary {
+  id: string
+  canonical_name: string
+  mention_count: number
+  first_seen?: string | null
+  last_seen?: string | null
+}
+
 export interface ListResponse {
   items?: MemoryUnit[]
   total?: number
@@ -28,6 +46,18 @@ export class HindsightClient {
     const query = new URLSearchParams({ limit: String(input.limit), offset: String(input.offset) })
     if (input.state) query.set("state", input.state)
     return this.#request<ListResponse>("GET", `/memories/list?${query}`)
+  }
+
+  /** Semantic search: ranked by meaning, not by keywords. */
+  async recall(query: string, limit: number): Promise<RecallResult[]> {
+    const response = await this.#request<{ results?: RecallResult[] }>("POST", "/memories/recall", { query })
+    return (response.results ?? []).slice(0, limit)
+  }
+
+  /** Entities the bank knows about, with how often each is mentioned. */
+  async entities(input: { limit: number; offset: number }): Promise<{ items: EntitySummary[]; total: number }> {
+    const query = new URLSearchParams({ limit: String(input.limit), offset: String(input.offset) })
+    return this.#request<{ items: EntitySummary[]; total: number }>("GET", `/entities?${query}`)
   }
 
   async getMemory(memoryId: string): Promise<MemoryUnit> {

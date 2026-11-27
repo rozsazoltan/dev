@@ -19,11 +19,12 @@ readable and restorable, and excludes it from recall and consolidation.
 
 ## Install
 
-1. Copy the agent into the project where it should appear:
+1. Copy both agents into the project where they should appear:
 
    ```bash
    mkdir -p .opencode/agents
-   cp plugins/hindsight-memory-auditor/agent/memory-auditor.md .opencode/agents/
+   cp plugins/hindsight-memory-auditor/agent/memory-auditor.md \
+      plugins/hindsight-memory-auditor/agent/memory-auditor-worker.md .opencode/agents/
    ```
 
    Save it to `~/.config/opencode/agents/` instead to have it in every project.
@@ -67,7 +68,8 @@ Select **Memory Auditor** in the agent picker, then:
 2. `memory_auditor_scan` — inventory and findings.
 3. `memory_auditor_inspect` — one memory with provenance.
 4. `memory_auditor_evidence` — whether cited repository paths exist (read-only, sandboxed to the project root); `memory_auditor_git` — branch/head info, working tree status or a bounded diff, without running a command.
-5. `memory_auditor_preview` — typed plan with operation IDs; a duplicate operation also carries the keeper's ID and text.
+5. `memory_auditor_recall` — semantic search by meaning; `memory_auditor_entities` — the subjects the bank tracks, so conflicts group by entity instead of wording.
+6. `memory_auditor_preview` — typed plan with operation IDs; a duplicate operation also carries the keeper's ID and text.
 6. Approve the exact IDs.
 6. `memory_auditor_apply`, then `memory_auditor_verify`.
 
@@ -77,9 +79,11 @@ Select **Memory Auditor** in the agent picker, then:
 - The bank is fixed by configuration; a model-supplied bank is rejected.
 - Routes are built in code. There is no generic request tool, no bank deletion, no bulk clear, no
   document reprocessing, and no arbitrary REST call.
-- The agent file denies edit, shell, subagent, webfetch, websearch and skill permissions, and the
-  plugin's `execute.before` hook blocks any tool outside the auditor set for the `memory-auditor`
-  agent, so prompt text is not the barrier.
+- The agent file denies edit, shell, webfetch, websearch and skill permissions, and allows the
+  `memory-auditor-worker` subagent only; the plugin's `execute.before` hook blocks any other tool,
+  so prompt text is not the barrier.
+- The worker is a separate read-only subagent: evidence checks on `read`, `glob`, `grep`,
+  `memory_auditor_evidence` and `memory_auditor_git`, no mutations.
 
 ## Known limitations
 

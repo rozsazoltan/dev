@@ -55,6 +55,24 @@ test("invalidate PATCHes the fixed bank with the configured route", async () => 
   assert.deepEqual(JSON.parse(fetchImpl.calls[0].body), { state: "invalidated", reason: "duplicate" })
 })
 
+test("recall posts the query and trims the results", async () => {
+  const fetchImpl = fakeFetch({ "/v1/default/banks/bank%3A%3Ax/memories/recall": () => [200, { results: [{ id: "a", text: "one" }, { id: "b", text: "two" }] }] })
+  const client = new HindsightClient(config, fetchImpl)
+  const results = await client.recall("injection", 1)
+  assert.equal(results.length, 1)
+  assert.deepEqual(JSON.parse(fetchImpl.calls[0].body), { query: "injection" })
+  assert.equal(fetchImpl.calls[0].method, "POST")
+})
+
+test("entities pages the bank entity list", async () => {
+  const fetchImpl = fakeFetch({ "/v1/default/banks/bank%3A%3Ax/entities": () => [200, { items: [{ id: "e", canonical_name: "plugin", mention_count: 3 }], total: 1 }] })
+  const client = new HindsightClient(config, fetchImpl)
+  const page = await client.entities({ limit: 10, offset: 0 })
+  assert.equal(page.total, 1)
+  assert.equal(page.items[0].canonical_name, "plugin")
+  assert.match(fetchImpl.calls[0].path, /limit=10/)
+})
+
 test("client surfaces HTTP failures with status and detail", async () => {
   const client = new HindsightClient(config, fakeFetch({ "*": () => [500, { detail: "boom" }] }))
   await assert.rejects(() => client.getMemory("abc"), /500.*boom/s)
