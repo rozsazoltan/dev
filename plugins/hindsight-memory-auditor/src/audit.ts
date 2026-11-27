@@ -18,6 +18,11 @@ export function strictKey(text: string): string {
   return text.trim()
 }
 
+/** Stable identifier for a curated operation, derived from its exact payload. */
+export function digestId(prefix: string, payload: string): string {
+  return `${prefix}-${digest(payload).slice(0, 12)}`
+}
+
 function digest(input: string): string {
   return createHash("sha256").update(input).digest("hex")
 }
@@ -90,6 +95,19 @@ export function scan(memories: MemoryUnit[], options: { minTextLength?: number }
   return findings
 }
 
+/** Packs a plan so its id and hash are derived from the bank and the exact operations. */
+export function packPlan(bank: string, findings: Finding[], operations: Operation[], now = new Date()): Plan {
+  const hash = digest(`${bank}\n${operations.map((operation) => `${operation.id}:${operation.before}`).join("\n")}`)
+  return {
+    id: hash.slice(0, 16),
+    hash,
+    bank,
+    createdAt: now.toISOString(),
+    findings,
+    operations,
+  }
+}
+
 /**
  * Turns findings into operations. Only exact duplicates produce automatic operations; everything
  * else needs a human decision, so the default plan never invents a correction.
@@ -115,13 +133,5 @@ export function buildPlan(bank: string, findings: Finding[], memories: MemoryUni
       })
     }
   }
-  const hash = digest(`${bank}\n${operations.map((operation) => `${operation.id}:${operation.before}`).join("\n")}`)
-  return {
-    id: hash.slice(0, 16),
-    hash,
-    bank,
-    createdAt: now.toISOString(),
-    findings,
-    operations,
-  }
+  return packPlan(bank, findings, operations, now)
 }

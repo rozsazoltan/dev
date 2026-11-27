@@ -38,11 +38,17 @@ export interface Finding {
   evidence?: string
 }
 
-export type OperationKind = "invalidate" | "restore"
+export type OperationKind = "invalidate" | "restore" | "merge" | "edit"
+
+export interface OperationSource {
+  id: string
+  text: string
+}
 
 export interface Operation {
   id: string
   kind: OperationKind
+  /** Target memory for `invalidate`, `restore` and `edit`; the first source for `merge`. */
   memoryId: string
   reason: string
   /** Text of the target at plan time, to detect a changed target before applying. */
@@ -50,6 +56,11 @@ export interface Operation {
   /** Duplicate retirement: the memory that must stay valid and unchanged. */
   keep?: string
   keepBefore?: string
+  /** `merge`: every source that must still be valid and unchanged, and the text to retain. */
+  sources?: OperationSource[]
+  text?: string
+  context?: string
+  documentId?: string
 }
 
 export interface Plan {

@@ -85,6 +85,76 @@ test("a plan from another bank is refused", async () => {
   await assert.rejects(() => applyPlan(client, plan, ["invalidate-a"], { auditOnly: false }), /belongs to bank bank/)
 })
 
+function mergeClient(overrides = {}) {
+  const calls = []
+  return {
+    calls,
+    bank: "bank",
+    async getMemory(id) {
+      return overrides[id] ?? { id, text: `text ${id}`, state: "valid" }
+    },
+    async retain(item) {
+      calls.push({ kind: "retain", item })
+    },
+    async invalidate(id, reason) {
+      calls.push({ kind: "invalidate", id, reason })
+    },
+    async updateText(id, text) {
+      calls.push({ kind: "edit", id, text })
+    },
+    async byDocument(documentId) {
+      return [{ id: "new", text: "merged", document_id: documentId }]
+    },
+  }
+}
+
+const mergeOperation = {
+  id: "merge-1",
+  kind: "merge",
+  memoryId: "a",
+  reason: "merge duplicates",
+  before: "text a",
+  sources: [
+    { id: "a", text: "text a" },
+    { id: "b", text: "text b" },
+  ],
+  text: "merged fact",
+  documentId: "memory-auditor-merge-1",
+}
+const mergePlan = { id: "p", hash: "h", bank: "bank", createdAt: "now", findings: [], operations: [mergeOperation] }
+
+test("merge retains the new text and retires every source", async () => {
+  const client = mergeClient()
+  const report = await applyPlan(client, mergePlan, ["merge-1"], { auditOnly: false })
+  assert.equal(report.results[0].status, "applied")
+  assert.deepEqual(client.calls.map((call) => call.kind), ["retain", "invalidate", "invalidate"])
+  assert.equal(client.calls[0].item.content, "merged fact")
+  assert.equal(client.calls[0].item.documentId, "memory-auditor-merge-1")
+})
+
+test("merge aborts when a source changed", async () => {
+  const client = mergeClient({ b: { id: "b", text: "rewritten", state: "valid" } })
+  const report = await applyPlan(client, mergePlan, ["merge-1"], { auditOnly: false })
+  assert.equal(report.results[0].status, "skipped")
+  assert.deepEqual(client.calls, [])
+})
+
+test("edit rewrites the text only when the target is unchanged", async () => {
+  const operation = { id: "edit-1", kind: "edit", memoryId: "a", reason: "fix", before: "text a", text: "corrected" }
+  const plan = { ...mergePlan, operations: [operation] }
+  const client = mergeClient()
+  const report = await applyPlan(client, plan, ["edit-1"], { auditOnly: false })
+  assert.equal(report.results[0].status, "applied")
+  assert.deepEqual(client.calls, [{ kind: "edit", id: "a", text: "corrected" }])
+})
+
+test("verify checks a merge by its retained document and retired sources", async () => {
+  const client = mergeClient({ a: { id: "a", text: "text a", state: "invalidated" }, b: { id: "b", text: "text b", state: "invalidated" } })
+  const report = await verifyPlan(client, mergePlan, ["merge-1"])
+  assert.equal(report.results[0].status, "applied")
+  assert.match(report.results[0].detail, /sources retired: true/)
+})
+
 test("verify reports unknown operation IDs", async () => {
   const report = await verifyPlan(fakeClient(), plan, ["invalidate-a", "typo"])
   assert.equal(report.results.length, 2)

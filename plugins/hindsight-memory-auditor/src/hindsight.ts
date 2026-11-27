@@ -67,6 +67,32 @@ export class HindsightClient {
     return this.#request<{ items: EntitySummary[]; total: number }>("GET", `/entities?${query}`)
   }
 
+  /** Retains one fact written by the auditor; the body is ignored like every mutation. */
+  async retain(item: { content: string; context?: string; documentId: string; metadata?: Record<string, unknown> }): Promise<void> {
+    await this.#send("POST", "/memories", {
+      items: [
+        {
+          content: item.content,
+          context: item.context,
+          document_id: item.documentId,
+          metadata: item.metadata,
+        },
+      ],
+    })
+  }
+
+  /** Rewrites a memory's text; Hindsight re-embeds it and drops derived observations. */
+  async updateText(memoryId: string, text: string): Promise<void> {
+    await this.#send("PATCH", `/memories/${encodeURIComponent(memoryId)}`, { text })
+  }
+
+  /** Memories that carry a document id, used to find a retained merge afterwards. */
+  async byDocument(documentId: string): Promise<MemoryUnit[]> {
+    const query = new URLSearchParams({ document_id: documentId, limit: "20", offset: "0" })
+    const page = await this.#request<ListResponse>("GET", `/memories/list?${query}`)
+    return page.items ?? []
+  }
+
   async getMemory(memoryId: string): Promise<MemoryUnit> {
     return this.#request<MemoryUnit>("GET", `/memories/${encodeURIComponent(memoryId)}`)
   }
