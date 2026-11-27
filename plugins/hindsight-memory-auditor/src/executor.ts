@@ -99,7 +99,8 @@ async function applyMerge(client: HindsightClient, operation: Operation): Promis
     const current = await client.getMemory(source.id)
     const valid = (current.state ?? "valid") === "valid"
     if (!valid) {
-      if (alreadyRetained) continue
+      // Resume only past a source this operation already retired: its text must be unchanged.
+      if (alreadyRetained && current.text === source.text) continue
       return { operationId: operation.id, memoryId: operation.memoryId, status: "skipped", detail: `Source ${source.id} is no longer valid.` }
     }
     if (current.text !== source.text) {

@@ -143,6 +143,16 @@ test("merge resumes when the replacement already exists", async () => {
   assert.match(report.results[0].detail, /resumed/)
 })
 
+test("merge aborts on resume when a retired source was edited", async () => {
+  const client = mergeClient({
+    a: { id: "a", text: "edited after retirement", state: "invalidated" },
+    __retained: [{ id: "new", text: "merged", state: "valid" }],
+  })
+  const report = await applyPlan(client, mergePlan, ["merge-1"], { auditOnly: false })
+  assert.equal(report.results[0].status, "skipped")
+  assert.deepEqual(client.calls, [])
+})
+
 test("merge aborts when a source changed", async () => {
   const client = mergeClient({ b: { id: "b", text: "rewritten", state: "valid" } })
   const report = await applyPlan(client, mergePlan, ["merge-1"], { auditOnly: false })
