@@ -33,7 +33,9 @@ export class PlanStore {
   }
 
   async load(sessionID: string, id: string): Promise<Plan | undefined> {
-    const plan = (await this.#all(sessionID))[id]
+    const value = await this.#storage.get(this.#key(sessionID))
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+    const plan = (value as Record<string, Plan>)[id]
     // A valid plan under another key is not the plan that was requested.
     return plan && plan.id === id && validatePlan(plan) ? structuredClone(plan) : undefined
   }
