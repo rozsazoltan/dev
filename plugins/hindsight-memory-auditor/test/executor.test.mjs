@@ -85,6 +85,12 @@ test("a plan from another bank is refused", async () => {
   await assert.rejects(() => applyPlan(client, plan, ["invalidate-a"], { auditOnly: false }), /belongs to bank bank/)
 })
 
+test("verify reports unknown operation IDs", async () => {
+  const report = await verifyPlan(fakeClient(), plan, ["invalidate-a", "typo"])
+  assert.equal(report.results.length, 2)
+  assert.equal(report.results.find((result) => result.operationId === "typo")?.status, "unverified")
+})
+
 test("verify reports the observed state", async () => {
   const report = await verifyPlan(fakeClient({ a: { id: "a", text: "same text", state: "invalidated" } }), plan, ["invalidate-a"])
   assert.equal(report.results[0].status, "applied")

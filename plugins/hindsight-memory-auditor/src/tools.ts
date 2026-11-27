@@ -181,8 +181,11 @@ export function createTools(
       input: object({ findingIds: { type: "array", items: { type: "string" } } }),
       async execute(input: unknown, context?: ToolContext) {
         const { id, state } = session(context)
-        const inventory = state.inventory ?? (await client.inventory())
-        const findings = state.findings ?? scan(inventory.memories)
+        // One snapshot: a concurrent scan must not pair new findings with an older inventory.
+        const snapshot = { inventory: state.inventory, findings: state.findings }
+        const inventory = snapshot.inventory ?? (await client.inventory())
+        const findings =
+          snapshot.inventory && snapshot.findings ? snapshot.findings : scan(inventory.memories)
         state.inventory = inventory
         state.findings = findings
         const selected = readStrings(input, "findingIds")

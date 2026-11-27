@@ -6,7 +6,7 @@ repository and applies only the corrections you approve.
 ## What it does
 
 - Reads the whole bank through the Hindsight REST API, paginated, not a top-k recall sample.
-- Triages deterministically: exact duplicates (case, punctuation and operators still distinguish facts), fragments shorter than 40 characters, and observations whose source memories were retired (`STALE_DERIVED`).
+- Triages deterministically: duplicates only when the trimmed text is byte-identical (case, punctuation, operators and quoted whitespace all distinguish facts), fragments shorter than 40 characters, and observations whose source memories were retired (`STALE_DERIVED`).
 - Leaves judgement about truth to the agent and to repository evidence; nothing is retired from a
   heuristic alone.
 - Turns accepted findings into typed operations, each bound to a memory ID, its current text and a

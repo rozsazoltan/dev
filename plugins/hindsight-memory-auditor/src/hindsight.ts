@@ -117,7 +117,9 @@ export class HindsightClient {
 
   /** Sends a mutation and ignores the body, so a changed response shape cannot break a request that worked. */
   async #send(method: string, path: string, body: unknown): Promise<void> {
-    await this.#fetchResponse(method, path, body)
+    const response = await this.#fetchResponse(method, path, body)
+    // The payload is unused; release the connection instead of leaving the body unread.
+    await response.body?.cancel().catch(() => undefined)
   }
 
   async #fetchResponse(method: string, path: string, body?: unknown): Promise<Response> {

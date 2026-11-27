@@ -2,8 +2,12 @@ import type { HindsightClient } from "./hindsight.ts"
 import type { ApplyReport, Operation, OperationResult, Plan } from "./types.ts"
 
 /**
- * Applies only the operations the caller approved by ID. Each target is re-fetched first, so a
- * memory that changed after the plan was built is skipped instead of overwritten.
+ * Applies only the operations the caller approved by ID. Each target and keeper is re-fetched
+ * first, so a changed memory is skipped instead of overwritten.
+ *
+ * Limitation: Hindsight exposes no versioned precondition, so this is a check-then-write and not a
+ * transactional guard. A concurrent writer that changes a keeper between the read and the PATCH is
+ * not detected; `restore` is the recovery path.
  */
 export async function applyPlan(
   client: HindsightClient,
@@ -84,6 +88,11 @@ export async function verifyPlan(client: HindsightClient, plan: Plan, operationI
   }
   const approved = new Set(operationIds)
   const results: OperationResult[] = []
+  const known = new Set(plan.operations.map((operation) => operation.id))
+  for (const id of approved) {
+    if (known.has(id)) continue
+    results.push({ operationId: id, memoryId: "", status: "unverified", detail: "Operation is not part of this plan." })
+  }
   for (const operation of plan.operations) {
     if (!approved.has(operation.id)) continue
     const expected = operation.kind === "restore" ? "valid" : "invalidated"

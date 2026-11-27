@@ -58,6 +58,27 @@ test("the store keeps only the last five plans", async () => {
   assert.deepEqual(keys.sort(), ["b", "c", "d", "e", "f"])
 })
 
+test("a clear cannot land inside a pending save", async () => {
+  const data = new Map()
+  let release
+  const gate = new Promise((resolve) => (release = resolve))
+  const storage = {
+    async get(key) {
+      return data.get(key)
+    },
+    async set(key, value) {
+      await gate
+      data.set(key, value)
+    },
+  }
+  const store = new PlanStore(storage)
+  const saving = store.save("s", plan("p"))
+  const clearing = store.clear("s")
+  release()
+  await Promise.all([saving, clearing])
+  assert.equal(await store.load("s", "p"), undefined)
+})
+
 test("a missing or corrupt entry yields no plan", async () => {
   const storage = fakeStorage()
   storage.data.set("hindsight-memory-auditor.plans.s1", "not-an-object")

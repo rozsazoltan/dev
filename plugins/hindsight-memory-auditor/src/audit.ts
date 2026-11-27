@@ -11,11 +11,11 @@ export function normalize(text: string): string {
 }
 
 /**
- * Conservative identity for retirement: only whitespace collapses, so case, punctuation, operators
- * and signs still distinguish `retries < 3` from `retries > 3`.
+ * Identity for retirement: the trimmed text must match exactly, so case, punctuation, operators and
+ * even whitespace inside a quoted value keep distinct facts apart.
  */
 export function strictKey(text: string): string {
-  return text.trim().replace(/\s+/g, " ")
+  return text.trim()
 }
 
 function digest(input: string): string {

@@ -14,6 +14,7 @@ const KEEP = 5
 export class PlanStore {
   readonly #storage: StorageLike
   readonly #prefix: string
+  readonly #queues = new Map<string, Promise<unknown>>()
 
   constructor(storage: StorageLike, prefix = "hindsight-memory-auditor.plans") {
     this.#storage = storage
@@ -21,11 +22,13 @@ export class PlanStore {
   }
 
   async save(sessionID: string, plan: Plan): Promise<void> {
-    const plans = await this.#all(sessionID)
-    plans[plan.id] = plan
-    const ids = Object.keys(plans)
-    for (const stale of ids.slice(0, Math.max(0, ids.length - KEEP))) delete plans[stale]
-    await this.#storage.set(this.#key(sessionID), plans)
+    await this.#serial(sessionID, async () => {
+      const plans = await this.#all(sessionID)
+      plans[plan.id] = plan
+      const ids = Object.keys(plans)
+      for (const stale of ids.slice(0, Math.max(0, ids.length - KEEP))) delete plans[stale]
+      await this.#storage.set(this.#key(sessionID), plans)
+    })
   }
 
   async load(sessionID: string, id: string): Promise<Plan | undefined> {
@@ -33,7 +36,17 @@ export class PlanStore {
   }
 
   async clear(sessionID: string): Promise<void> {
-    await this.#storage.set(this.#key(sessionID), {})
+    await this.#serial(sessionID, async () => {
+      await this.#storage.set(this.#key(sessionID), {})
+    })
+  }
+
+  /** One read-modify-write queue per session, so a clear cannot land inside a save. */
+  async #serial<T>(sessionID: string, run: () => Promise<T>): Promise<T> {
+    const previous = this.#queues.get(sessionID) ?? Promise.resolve()
+    const next = previous.then(run, run)
+    this.#queues.set(sessionID, next.catch(() => undefined))
+    return next
   }
 
   #key(sessionID: string): string {

@@ -30,6 +30,15 @@ test("scan keeps distinct operators apart", () => {
   assert.equal(findings.some((finding) => finding.state === "DUPLICATE"), false)
 })
 
+test("scan keeps quoted whitespace differences apart", () => {
+  const memories = [
+    memory("a", 'The separator is "  ".'),
+    memory("b", 'The separator is " ".'),
+  ]
+  const findings = scan(memories)
+  assert.equal(findings.some((finding) => finding.state === "DUPLICATE"), false)
+})
+
 test("scan flags short fragments without retiring them", () => {
   const findings = scan([memory("a", "ok")])
   assert.equal(findings.length, 1)
