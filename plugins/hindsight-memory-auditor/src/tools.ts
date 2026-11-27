@@ -99,6 +99,30 @@ export function createTools(
       },
     },
     {
+      name: "memory_auditor_inventory",
+      options: { codemode: false },
+      description:
+        "Page through the raw memory units of the whole bank with their type, state, dates and text, so the auditor can analyse every memory rather than only findings.",
+      input: object({ offset: { type: "number" }, limit: { type: "number" }, state: { type: "string" }, factType: { type: "string" } }),
+      async execute(input: unknown) {
+        const offset = readNumber(input, "offset", 0, 1_000_000)
+        const limit = readNumber(input, "limit", 50, 200)
+        const state = readOptionalString(input, "state")
+        const factType = readOptionalString(input, "factType")
+        const page = await client.listMemories({ limit, offset, ...(state ? { state } : {}) })
+        const items = (page.items ?? []).filter((memory) => !factType || memory.fact_type === factType)
+        return {
+          content: [
+            `offset ${offset}, ${items.length} of ${page.total ?? "?"} matching, ${items.length} shown`,
+            ...items.map(
+              (memory) =>
+                `- ${memory.id} [${memory.fact_type ?? "unknown"}/${memory.state ?? "valid"}${memory.document_id ? `, doc ${memory.document_id}` : ""}] ${excerpt(memory.text)}`,
+            ),
+          ].join("\n"),
+        }
+      },
+    },
+    {
       name: "memory_auditor_inspect",
       options: { codemode: false },
       description: "Show one memory with its provenance, state, invalidation reason and full text.",
@@ -196,7 +220,7 @@ export function createTools(
         "Propose one curated change: `merge` two or more memories into one retained fact (the sources are retired), or `edit` one memory's text. Nothing is applied; the returned plan must be approved by operation ID.",
       input: object(
         {
-          kind: { type: "string", enum: ["merge", "edit"] },
+          kind: { type: "string", enum: ["merge", "edit", "invalidate", "restore"] },
           memoryIds: { type: "array", items: { type: "string" } },
           text: { type: "string" },
           context: { type: "string" },
@@ -212,9 +236,41 @@ export function createTools(
         const reason = readOptionalString(input, "reason") ?? "Curated by the memory auditor"
         const context_ = readOptionalString(input, "context")
         const memories = await Promise.all(memoryIds.map((memoryId) => client.getMemory(memoryId)))
+        if (kind === "restore") {
+          if (memories.length === 0) throw new Error("restore takes at least one memoryId")
+          const operations = memories.map((memory) => ({
+            id: digestId("restore", `${memory.id}:${reason}`),
+            kind: "restore" as const,
+            memoryId: memory.id,
+            reason,
+            before: memory.text,
+          }))
+          const plan = packPlan(client.bank, [], operations)
+          await plans.save(id, plan)
+          return {
+            content: [`plan: ${plan.id}`, ...operations.map((operation) => `- ${operation.id}: restore ${operation.memoryId}`)].join("\n"),
+          }
+        }
         for (const memory of memories) {
-          if ((memory.state ?? "valid") !== "valid") throw new Error(`Memory ${memory.id} is not valid.`)
+          if (kind !== "invalidate" && (memory.state ?? "valid") !== "valid") throw new Error(`Memory ${memory.id} is not valid.`)
           if (!curatable(memory)) throw new Error(`Memory ${memory.id} is not curatable (fact_type: ${memory.fact_type ?? "unknown"}).`)
+        }
+        if (kind === "invalidate") {
+          const operations = memories.map((memory) => ({
+            id: digestId("invalidate", `${memory.id}:${memory.text}:${reason}`),
+            kind: "invalidate" as const,
+            memoryId: memory.id,
+            reason,
+            before: memory.text,
+          }))
+          const plan = packPlan(client.bank, [], operations)
+          await plans.save(id, plan)
+          return {
+            content: [
+              `plan: ${plan.id}`,
+              ...operations.map((operation) => `- ${operation.id}: invalidate ${operation.memoryId} — "${excerpt(operations.find((item) => item.id === operation.id)?.before ?? "")}"`),
+            ].join("\n"),
+          }
         }
         if (kind === "edit") {
           if (memories.length !== 1) throw new Error("edit takes exactly one memoryId")
@@ -226,7 +282,7 @@ export function createTools(
           await plans.save(id, plan)
           return { content: `plan: ${plan.id}\n- ${operationId}: edit ${target.id}\n  before: "${excerpt(target.text)}"\n  after:  "${excerpt(text)}"` }
         }
-        if (kind !== "merge") throw new Error("kind must be merge or edit")
+        if (kind !== "merge") throw new Error("kind must be merge, edit, invalidate or restore")
         if (memories.length < 2) throw new Error("merge takes at least two memoryIds")
         const operationId = digestId(
           "merge",

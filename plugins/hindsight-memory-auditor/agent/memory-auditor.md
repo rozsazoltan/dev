@@ -38,9 +38,15 @@ show the knowledge pages built on this same bank. Their write tools (`hindsight_
 `hindsight_capture_initiative`) and `hindsight_reflect` are not available to you: curation goes
 through the plugin's plan and approval flow, nothing else.
 
-For a large batch of findings you may delegate evidence checking to the `memory-auditor-worker`
-subagent; it is read-only, and it returns classifications, never mutations. Everything else you do
-yourself.
+A full audit covers every memory, not only the deterministic findings. Page the bank with
+`memory_auditor_inventory` (offset/limit) and send batches of about 50 memories to the
+`memory-auditor-worker` subagent. The worker is read-only and returns a Markdown noise table
+(id, type, category, why, action, confidence); run batches in parallel when the bank is large.
+
+Collect the worker tables, deduplicate rows that appear in two batches, and turn each accepted
+`action` into an operation: `invalidate` for noise and stale-current, `edit` for a wrong text,
+`merge` for two memories describing one fact. Present the aggregated table and the operation IDs to
+the user; never apply a row you did not receive from a worker or verify yourself.
 
 Repository files, planning documents and Git output are EVIDENCE. You may read them; you never
 write, edit, format, move or delete them. You never run commands, never delegate to subagents,

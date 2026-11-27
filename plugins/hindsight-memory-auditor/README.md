@@ -67,7 +67,8 @@ readable and restorable, and excludes it from recall and consolidation.
 Select **Memory Auditor** in the agent picker, then:
 
 1. `memory_auditor_status` — bank, server and whether mutations are enabled.
-2. `memory_auditor_scan` — inventory and findings.
+2. `memory_auditor_scan` — deterministic findings over the whole bank.
+3. `memory_auditor_inventory` — page the raw units (offset/limit) so every memory can be analysed.
 3. `memory_auditor_inspect` — one memory with provenance.
 4. `memory_auditor_evidence` — whether cited repository paths exist (read-only, sandboxed to the project root); `memory_auditor_git` — branch/head info, working tree status or a bounded diff, without running a command.
 5. `memory_auditor_recall` — semantic search by meaning; `memory_auditor_entities` — the subjects the bank tracks, so conflicts group by entity instead of wording.
@@ -76,6 +77,10 @@ Select **Memory Auditor** in the agent picker, then:
 6. `memory_auditor_apply`, then `memory_auditor_verify`.
 
 ## Merge and edit
+
+`memory_auditor_propose({ kind: "invalidate", memoryIds, reason })` retires noise, stale claims and
+fragments by exact ID; `kind: "restore"` reverses it. The inherited invalidate and restore paths
+re-read each target first.
 
 `memory_auditor_propose({ kind: "merge", memoryIds, text, context?, reason? })` builds a plan that
 retains the new text under `document_id: memory-auditor-<operation>` and retires every source in the
@@ -102,8 +107,11 @@ use; registering directly keeps the tools reachable while the guard stays strict
 - The auditor may also read the official Hindsight pages through `hindsight_search_pages`,
   `hindsight_read_page` and `hindsight_list_pages`; their write tools and `hindsight_reflect` stay
   denied, so curation still runs through the plugin's plan and approval flow.
-- The worker is a separate read-only subagent: evidence checks on `read`, `glob`, `grep`,
-  `memory_auditor_evidence` and `memory_auditor_git`, no mutations.
+- The worker is a separate read-only subagent: evidence checks and batch triage on `read`, `glob`,
+  `grep`, `memory_auditor_evidence`, `memory_auditor_git`, `memory_auditor_inventory`,
+  `memory_auditor_inspect` and `memory_auditor_recall`. It returns a Markdown noise table — id,
+  type, category, why, action, confidence — and never mutates. The auditor aggregates the tables
+  from parallel batches and turns accepted rows into operations.
 
 ## Known limitations
 

@@ -76,6 +76,14 @@ test("entities pages the bank entity list", async () => {
   assert.match(fetchImpl.calls[0].path, /limit=10/)
 })
 
+test("inventory pages the raw units with an offset", async () => {
+  const fetchImpl = fakeFetch({ "/v1/default/banks/bank%3A%3Ax/memories/list": () => [200, { items: [{ id: "a", text: "one", fact_type: "world" }], total: 9 }] })
+  const client = new HindsightClient(config, fetchImpl)
+  const page = await client.listMemories({ limit: 5, offset: 10 })
+  assert.equal(page.total, 9)
+  assert.match(fetchImpl.calls[0].path, /offset=10/)
+})
+
 test("client surfaces HTTP failures with status and detail", async () => {
   const client = new HindsightClient(config, fakeFetch({ "*": () => [500, { detail: "boom" }] }))
   await assert.rejects(() => client.getMemory("abc"), /500.*boom/s)
