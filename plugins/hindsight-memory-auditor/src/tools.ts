@@ -52,6 +52,7 @@ export function createTools(
   return [
     {
       name: "memory_auditor_status",
+      options: { codemode: false },
       description:
         "Report the Memory Auditor scope: selected Hindsight bank, server, audit-only flag, and what the current session can change.",
       input: object({}),
@@ -72,6 +73,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_scan",
+      options: { codemode: false },
       description:
         "Read the whole bank and the deterministic findings (duplicates, short fragments, observations with retired sources). Read-only; it does not change any memory.",
       input: object({}),
@@ -98,6 +100,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_inspect",
+      options: { codemode: false },
       description: "Show one memory with its provenance, state, invalidation reason and full text.",
       input: object({ memoryId: { type: "string" } }, ["memoryId"]),
       async execute(input: unknown) {
@@ -120,6 +123,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_evidence",
+      options: { codemode: false },
       description:
         "Read-only evidence for the repository paths a finding depends on: existence, size and first line. Paths stay inside the project root.",
       input: object({ paths: { type: "array", items: { type: "string" } } }, ["paths"]),
@@ -131,6 +135,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_git",
+      options: { codemode: false },
       description:
         "Read-only git view: branch and head information, working tree status, or a bounded diff. No command is executed.",
       input: object({ mode: { type: "string", enum: ["info", "status", "diff"] }, base: { type: "string" } }, ["mode"]),
@@ -145,6 +150,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_recall",
+      options: { codemode: false },
       description:
         "Semantic search inside the bank: ranked by meaning, not keywords. Use it to find related memories for a finding instead of scanning text.",
       input: object({ query: { type: "string" }, limit: { type: "number" } }, ["query"]),
@@ -165,6 +171,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_entities",
+      options: { codemode: false },
       description:
         "List the entities the bank tracks with their mention counts, so conflicting or outdated facts can be grouped by subject instead of by wording.",
       input: object({ limit: { type: "number" }, offset: { type: "number" } }),
@@ -184,6 +191,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_preview",
+      options: { codemode: false },
       description:
         "Build a typed plan from this session's last scan. Optional findingIds narrow it to selected findings. Returns operation IDs; nothing is applied.",
       input: object({ findingIds: { type: "array", items: { type: "string" } } }),
@@ -218,6 +226,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_apply",
+      options: { codemode: false },
       description:
         "Apply approved operations from a stored plan. Requires the plan ID and the exact operation IDs the user approved; targets and keepers are re-read first.",
       input: object({ planId: { type: "string" }, operationIds: { type: "array", items: { type: "string" } } }, [
@@ -240,6 +249,7 @@ export function createTools(
     },
     {
       name: "memory_auditor_verify",
+      options: { codemode: false },
       description: "Read every approved item back and report the observed state.",
       input: object({ planId: { type: "string" }, operationIds: { type: "array", items: { type: "string" } } }, [
         "planId",

@@ -74,6 +74,12 @@ Select **Memory Auditor** in the agent picker, then:
 6. Approve the exact IDs.
 6. `memory_auditor_apply`, then `memory_auditor_verify`.
 
+## Tool visibility
+
+The auditor tools are registered as direct tools, not Code Mode tools. The guard allows only the
+auditor tool names, and a Code Mode call arrives as `execute`, which the auditor is not allowed to
+use; registering directly keeps the tools reachable while the guard stays strict.
+
 ## Safety model
 
 - `auditOnly` defaults to true; mutations require an explicit plan and explicit operation IDs.
