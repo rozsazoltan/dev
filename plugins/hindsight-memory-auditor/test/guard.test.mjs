@@ -13,6 +13,11 @@ test("the auditor keeps reads and its own tools", () => {
   }
 })
 
+test("qualified tool names still match the allowlist", () => {
+  assert.equal(denyReason("memory-auditor", "hindsight-memory-auditor.memory_auditor_scan"), undefined)
+  assert.match(denyReason("memory-auditor", "hindsight-memory-auditor.shell") ?? "", /may not use/)
+})
+
 test("the auditor loses writes, commands, delegation and network", () => {
   for (const tool of ["edit", "write", "patch", "shell", "bash", "task", "subagent", "webfetch", "websearch", "skill"]) {
     assert.match(denyReason("memory-auditor", tool) ?? "", /may not use/, tool)

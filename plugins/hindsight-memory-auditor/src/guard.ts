@@ -23,6 +23,8 @@ const ALLOWED = new Set([
  */
 export function denyReason(agentId: string | undefined, tool: string): string | undefined {
   if (agentId !== AUDITOR_AGENT) return undefined
-  if (ALLOWED.has(tool)) return undefined
+  // Some hosts qualify a tool name (`plugin.memory_auditor_scan`); compare the bare name too.
+  const bare = tool.split(/[./:]/).pop() ?? tool
+  if (ALLOWED.has(tool) || ALLOWED.has(bare)) return undefined
   return `Memory Auditor may not use \`${tool}\`: it audits the Hindsight bank with repository evidence only, and never writes files, runs commands, delegates or reaches the network.`
 }
