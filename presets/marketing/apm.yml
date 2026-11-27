@@ -1,0 +1,13 @@
+name: dev-marketing
+version: 1.0.0
+description: Marketing subagents for SEO, content, ecommerce and social media.
+author: rozsazoltan
+targets:
+- opencode
+dependencies:
+  apm:
+  - rozsazoltan/primitives/agents/marketing-seo
+  - rozsazoltan/primitives/agents/marketing-content
+  - rozsazoltan/primitives/agents/marketing-ecommerce
+  - rozsazoltan/primitives/agents/marketing-social-media
+  mcp: []
