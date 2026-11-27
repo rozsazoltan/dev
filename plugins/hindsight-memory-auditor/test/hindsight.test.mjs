@@ -69,6 +69,12 @@ test("resolveConfig requires an explicit bank and rejects other schemes", () => 
   assert.equal(resolveConfig({ bank: "b", auditOnly: false }, {}).auditOnly, false)
 })
 
+test("a bearer token is refused over non-loopback http", () => {
+  assert.throws(() => resolveConfig({ apiUrl: "http://hindsight.example:8890", bank: "b", token: "t" }, {}), /bearer token requires https/)
+  assert.equal(resolveConfig({ apiUrl: "http://127.0.0.1:8890", bank: "b", token: "t" }, {}).token, "t")
+  assert.equal(resolveConfig({ apiUrl: "https://hindsight.example", bank: "b", token: "t" }, {}).token, "t")
+})
+
 test("assertBank refuses a different bank", () => {
   assert.equal(assertBank("b", "b"), "b")
   assert.throws(() => assertBank("b", "other"), /Refusing to touch bank other/)

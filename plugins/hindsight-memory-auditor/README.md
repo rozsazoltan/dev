@@ -6,7 +6,7 @@ repository and applies only the corrections you approve.
 ## What it does
 
 - Reads the whole bank through the Hindsight REST API, paginated, not a top-k recall sample.
-- Triages deterministically: exact duplicates, fragments shorter than 40 characters, and observations whose source memories were retired (`STALE_DERIVED`).
+- Triages deterministically: exact duplicates (case, punctuation and operators still distinguish facts), fragments shorter than 40 characters, and observations whose source memories were retired (`STALE_DERIVED`).
 - Leaves judgement about truth to the agent and to repository evidence; nothing is retired from a
   heuristic alone.
 - Turns accepted findings into typed operations, each bound to a memory ID, its current text and a
@@ -67,7 +67,7 @@ Select **Memory Auditor** in the agent picker, then:
 2. `memory_auditor_scan` — inventory and findings.
 3. `memory_auditor_inspect` — one memory with provenance.
 4. `memory_auditor_evidence` — whether cited repository paths exist (read-only, sandboxed to the project root); `memory_auditor_git` — branch/head info, working tree status or a bounded diff, without running a command.
-5. `memory_auditor_preview` — typed plan with operation IDs.
+5. `memory_auditor_preview` — typed plan with operation IDs; a duplicate operation also carries the keeper's ID and text.
 6. Approve the exact IDs.
 6. `memory_auditor_apply`, then `memory_auditor_verify`.
 
@@ -86,7 +86,7 @@ Select **Memory Auditor** in the agent picker, then:
 - The guard covers OpenCode tool execution. It cannot stop a *different* loaded plugin from acting
   on its own hooks, and it does not sandbox the model.
 - There is no approval UI: approval is the caller passing explicit operation IDs to
-  `memory_auditor_apply`. Plans persist in plugin storage (last five), so an approval survives a restart.
+  `memory_auditor_apply`. Plans persist in plugin storage, last five per session, so an approval survives a restart and sessions stay isolated.
 - Classification is heuristic plus agent reasoning; contradictions and outdated facts need human
   evidence, and the tool reports them instead of guessing.
 - Editing a memory re-embeds it and drops its derived observations; reprocessing a source document

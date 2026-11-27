@@ -47,6 +47,9 @@ export interface Operation {
   reason: string
   /** Text of the target at plan time, to detect a changed target before applying. */
   before: string
+  /** Duplicate retirement: the memory that must stay valid and unchanged. */
+  keep?: string
+  keepBefore?: string
 }
 
 export interface Plan {

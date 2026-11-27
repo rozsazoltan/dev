@@ -52,12 +52,19 @@ export class HindsightClient {
     let offset = 0
     let truncated = false
     for (;;) {
-      const page = await this.listMemories({ limit: this.#config.pageSize, offset })
-      const items = page.items ?? []
+      const remaining = this.#config.maxMemories - memories.length
+      if (remaining <= 0) {
+        truncated = true
+        break
+      }
+      const limit = Math.min(this.#config.pageSize, remaining)
+      const page = await this.listMemories({ limit, offset })
+      const items = (page.items ?? []).slice(0, limit)
       memories.push(...items)
       offset += items.length
-      if (items.length < this.#config.pageSize) break
+      if (items.length < limit) break
       if (memories.length >= this.#config.maxMemories) {
+        // A full page at the cap means more may exist; report partial coverage.
         truncated = true
         break
       }

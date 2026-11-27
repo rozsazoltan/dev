@@ -21,6 +21,15 @@ test("scan groups identical text and keeps the newest memory", () => {
   assert.deepEqual(duplicate.memoryIds.sort(), ["a", "b"])
 })
 
+test("scan keeps distinct operators apart", () => {
+  const memories = [
+    memory("a", "Reject requests when retries < 3."),
+    memory("b", "Reject requests when retries > 3."),
+  ]
+  const findings = scan(memories)
+  assert.equal(findings.some((finding) => finding.state === "DUPLICATE"), false)
+})
+
 test("scan flags short fragments without retiring them", () => {
   const findings = scan([memory("a", "ok")])
   assert.equal(findings.length, 1)

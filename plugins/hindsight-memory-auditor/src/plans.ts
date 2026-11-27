@@ -5,36 +5,43 @@ export interface StorageLike {
   set(key: string, value: unknown): Promise<void>
 }
 
-const KEY = "hindsight-memory-auditor.plans"
 const KEEP = 5
 
 /**
- * Plans survive a restart so an approval is not lost with the process. Only the last few are kept,
- * and a plan still carries its bank, hash and exact operation IDs.
+ * Plans persist per session, so an approval survives a restart and one session never sees or
+ * clears another session's plans.
  */
 export class PlanStore {
   readonly #storage: StorageLike
-  readonly #key: string
+  readonly #prefix: string
 
-  constructor(storage: StorageLike, key = KEY) {
+  constructor(storage: StorageLike, prefix = "hindsight-memory-auditor.plans") {
     this.#storage = storage
-    this.#key = key
+    this.#prefix = prefix
   }
 
-  async save(plan: Plan): Promise<void> {
-    const plans = await this.#all()
+  async save(sessionID: string, plan: Plan): Promise<void> {
+    const plans = await this.#all(sessionID)
     plans[plan.id] = plan
     const ids = Object.keys(plans)
     for (const stale of ids.slice(0, Math.max(0, ids.length - KEEP))) delete plans[stale]
-    await this.#storage.set(this.#key, plans)
+    await this.#storage.set(this.#key(sessionID), plans)
   }
 
-  async load(id: string): Promise<Plan | undefined> {
-    return (await this.#all())[id]
+  async load(sessionID: string, id: string): Promise<Plan | undefined> {
+    return (await this.#all(sessionID))[id]
   }
 
-  async #all(): Promise<Record<string, Plan>> {
-    const value = await this.#storage.get(this.#key)
-    return value && typeof value === "object" && !Array.isArray(value) ? ({ ...(value as Record<string, Plan>) }) : {}
+  async clear(sessionID: string): Promise<void> {
+    await this.#storage.set(this.#key(sessionID), {})
+  }
+
+  #key(sessionID: string): string {
+    return `${this.#prefix}.${sessionID}`
+  }
+
+  async #all(sessionID: string): Promise<Record<string, Plan>> {
+    const value = await this.#storage.get(this.#key(sessionID))
+    return value && typeof value === "object" && !Array.isArray(value) ? { ...(value as Record<string, Plan>) } : {}
   }
 }

@@ -63,6 +63,22 @@ test("unknown operation IDs are reported, not applied", async () => {
   assert.equal(report.results[0].status, "failed")
 })
 
+test("a duplicate is skipped when its keeper is no longer valid", async () => {
+  const client = fakeClient({ a: { id: "a", text: "same text", state: "valid" }, keeper: { id: "keeper", text: "same text", state: "invalidated" } })
+  const guarded = { ...plan, operations: [{ ...plan.operations[0], keep: "keeper", keepBefore: "same text" }] }
+  const report = await applyPlan(client, guarded, ["invalidate-a"], { auditOnly: false })
+  assert.equal(report.results[0].status, "skipped")
+  assert.match(report.results[0].detail, /keeper is no longer valid/)
+})
+
+test("a duplicate is skipped when its keeper changed", async () => {
+  const client = fakeClient({ a: { id: "a", text: "same text", state: "valid" }, keeper: { id: "keeper", text: "rewritten", state: "valid" } })
+  const guarded = { ...plan, operations: [{ ...plan.operations[0], keep: "keeper", keepBefore: "same text" }] }
+  const report = await applyPlan(client, guarded, ["invalidate-a"], { auditOnly: false })
+  assert.equal(report.results[0].status, "skipped")
+  assert.match(report.results[0].detail, /keeper changed/)
+})
+
 test("verify reports the observed state", async () => {
   const report = await verifyPlan(fakeClient({ a: { id: "a", text: "same text", state: "invalidated" } }), plan, ["invalidate-a"])
   assert.equal(report.results[0].status, "applied")

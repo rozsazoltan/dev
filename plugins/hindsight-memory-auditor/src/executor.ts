@@ -29,6 +29,25 @@ export async function applyPlan(
 
 async function applyOperation(client: HindsightClient, operation: Operation): Promise<OperationResult> {
   try {
+    if (operation.keep) {
+      const keeper = await client.getMemory(operation.keep)
+      if ((keeper.state ?? "valid") !== "valid") {
+        return {
+          operationId: operation.id,
+          memoryId: operation.memoryId,
+          status: "skipped",
+          detail: "The duplicate keeper is no longer valid; keeping the target would preserve the fact.",
+        }
+      }
+      if (keeper.text !== operation.keepBefore) {
+        return {
+          operationId: operation.id,
+          memoryId: operation.memoryId,
+          status: "skipped",
+          detail: "The duplicate keeper changed after the plan was built; rebuild the plan.",
+        }
+      }
+    }
     const current = await client.getMemory(operation.memoryId)
     if (current.state === "invalidated") {
       return { operationId: operation.id, memoryId: operation.memoryId, status: "skipped", detail: "Already invalidated." }

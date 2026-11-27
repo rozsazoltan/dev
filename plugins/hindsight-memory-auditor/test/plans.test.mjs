@@ -45,21 +45,31 @@ const plan = (id) => ({ id, hash: id, bank: "b", createdAt: "now", findings: [],
 
 test("plans survive a new store instance over the same storage", async () => {
   const storage = fakeStorage()
-  await new PlanStore(storage).save(plan("p1"))
-  const loaded = await new PlanStore(storage).load("p1")
+  await new PlanStore(storage).save("s1", plan("p1"))
+  const loaded = await new PlanStore(storage).load("s1", "p1")
   assert.equal(loaded?.id, "p1")
 })
 
 test("the store keeps only the last five plans", async () => {
   const storage = fakeStorage()
   const store = new PlanStore(storage)
-  for (const id of ["a", "b", "c", "d", "e", "f"]) await store.save(plan(id))
-  const keys = Object.keys(storage.data.get("hindsight-memory-auditor.plans"))
+  for (const id of ["a", "b", "c", "d", "e", "f"]) await store.save("s1", plan(id))
+  const keys = Object.keys(storage.data.get("hindsight-memory-auditor.plans.s1"))
   assert.deepEqual(keys.sort(), ["b", "c", "d", "e", "f"])
 })
 
 test("a missing or corrupt entry yields no plan", async () => {
   const storage = fakeStorage()
-  storage.data.set("hindsight-memory-auditor.plans", "not-an-object")
-  assert.equal(await new PlanStore(storage).load("x"), undefined)
+  storage.data.set("hindsight-memory-auditor.plans.s1", "not-an-object")
+  assert.equal(await new PlanStore(storage).load("s1", "x"), undefined)
+})
+
+test("sessions do not see or clear each other's plans", async () => {
+  const storage = fakeStorage()
+  const store = new PlanStore(storage)
+  await store.save("a", plan("pa"))
+  await store.save("b", plan("pb"))
+  await store.clear("a")
+  assert.equal(await store.load("a", "pa"), undefined)
+  assert.equal((await store.load("b", "pb"))?.id, "pb")
 })

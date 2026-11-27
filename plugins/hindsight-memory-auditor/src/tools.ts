@@ -1,16 +1,21 @@
 import { buildPlan, scan } from "./audit.ts"
 import { applyPlan, verifyPlan } from "./executor.ts"
+import { createEvidence, createGitEvidence, formatEvidence, type VcsLike } from "./evidence.ts"
 import type { HindsightClient } from "./hindsight.ts"
-import { createEvidence, formatEvidence, type VcsLike, createGitEvidence } from "./evidence.ts"
-import { PlanStore } from "./plans.ts"
-import type { AuditorConfig, Finding, Inventory, MemoryUnit, Plan } from "./types.ts"
+import type { PlanStore } from "./plans.ts"
+import type { AuditorConfig, Finding, Inventory } from "./types.ts"
 
-export interface AuditorState {
+/** Audits are per session: one conversation never reads or clears another's findings. */
+export interface SessionState {
   inventory?: Inventory
   findings?: Finding[]
 }
 
-const text = (value: string) => (value.length > 240 ? `${value.slice(0, 240)}…` : value)
+interface ToolContext {
+  sessionID?: string
+}
+
+const excerpt = (value: string) => (value.length > 240 ? `${value.slice(0, 240)}…` : value)
 
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({
   type: "object",
@@ -23,13 +28,21 @@ const object = (properties: Record<string, unknown>, required: string[] = []) =>
 export function createTools(
   client: HindsightClient,
   config: AuditorConfig,
-  state: AuditorState,
+  sessions: Map<string, SessionState>,
   root: string,
   plans: PlanStore,
   vcs?: VcsLike,
 ) {
   const evidence = createEvidence(root)
   const git = vcs ? createGitEvidence(vcs, root) : undefined
+
+  function session(context?: ToolContext): { id: string; state: SessionState } {
+    const id = context?.sessionID ?? "default"
+    const state = sessions.get(id) ?? {}
+    sessions.set(id, state)
+    return { id, state }
+  }
+
   return [
     {
       name: "memory_auditor_status",
@@ -52,14 +65,15 @@ export function createTools(
     {
       name: "memory_auditor_scan",
       description:
-        "Read the whole bank and the deterministic findings (duplicates, short fragments, conflicting openings). Read-only; it does not change any memory.",
+        "Read the whole bank and the deterministic findings (duplicates, short fragments, observations with retired sources). Read-only; it does not change any memory.",
       input: object({}),
-      async execute() {
+      async execute(_input: unknown, context?: ToolContext) {
+        const { id, state } = session(context)
         const inventory = await client.inventory()
         const findings = scan(inventory.memories)
         state.inventory = inventory
         state.findings = findings
-
+        await plans.clear(id)
         const counts = findings.reduce<Record<string, number>>((all, finding) => {
           all[finding.state] = (all[finding.state] ?? 0) + 1
           return all
@@ -69,8 +83,27 @@ export function createTools(
             `bank: ${inventory.bank}`,
             `scanned: ${inventory.scanned} (valid ${inventory.valid}, invalidated ${inventory.invalidated})${inventory.truncated ? " — truncated at maxMemories, coverage is partial" : ""}`,
             `findings: ${findings.length} ${JSON.stringify(counts)}`,
-            ...findings.slice(0, 20).map((finding) => `- [${finding.state}] ${finding.id}: ${finding.detail}`),
-            findings.length > 20 ? `… ${findings.length - 20} more findings` : "",
+            ...findings.map((finding) => `- [${finding.state}] ${finding.id} on ${finding.memoryIds.join(",")}: ${excerpt(finding.detail)}`),
+          ].join("\n"),
+        }
+      },
+    },
+    {
+      name: "memory_auditor_inspect",
+      description: "Show one memory with its provenance, state, invalidation reason and full text.",
+      input: object({ memoryId: { type: "string" } }, ["memoryId"]),
+      async execute(input: unknown) {
+        const memory = await client.getMemory(readString(input, "memoryId"))
+        return {
+          content: [
+            `id: ${memory.id}`,
+            `state: ${memory.state ?? "valid"}`,
+            `type: ${memory.fact_type ?? "unknown"}`,
+            `document: ${memory.document_id ?? "none"}`,
+            `updated: ${memory.updated_at ?? memory.mentioned_at ?? memory.date ?? "unknown"}`,
+            memory.invalidation_reason ? `invalidated because: ${memory.invalidation_reason}` : "",
+            "text:",
+            memory.text,
           ]
             .filter(Boolean)
             .join("\n"),
@@ -78,13 +111,14 @@ export function createTools(
       },
     },
     {
-      name: "memory_auditor_inspect",
-      description: "Show one memory with its provenance, state and invalidation reason.",
-      input: object({ memoryId: { type: "string" } }, ["memoryId"]),
+      name: "memory_auditor_evidence",
+      description:
+        "Read-only evidence for the repository paths a finding depends on: existence, size and first line. Paths stay inside the project root.",
+      input: object({ paths: { type: "array", items: { type: "string" } } }, ["paths"]),
       async execute(input: unknown) {
-        const memoryId = readString(input, "memoryId")
-        const memory = await client.getMemory(memoryId)
-        return { content: formatMemory(memory) }
+        const paths = readStrings(input, "paths")
+        if (paths.length === 0) throw new Error("Invalid input: paths must list at least one repository path")
+        return { content: formatEvidence(await evidence.inspect(paths), root) }
       },
     },
     {
@@ -98,28 +132,16 @@ export function createTools(
         if (mode === "info") return { content: await git.info() }
         if (mode === "status") return { content: await git.status() }
         if (mode !== "diff") throw new Error("Unknown git mode; use info, status or diff.")
-        const base = readOptionalString(input, "base")
-        return { content: await git.diff("working", base) }
-      },
-    },
-    {
-      name: "memory_auditor_evidence",
-      description:
-        "Read-only evidence for the repository paths a finding depends on: existence, size and first line. Paths stay inside the project root.",
-      input: object({ paths: { type: "array", items: { type: "string" } } }, ["paths"]),
-      async execute(input: unknown) {
-        const paths = readStrings(input, "paths")
-        if (paths.length === 0) throw new Error("Invalid input: paths must list at least one repository path")
-        const entries = await evidence.inspect(paths)
-        return { content: formatEvidence(entries, root) }
+        return { content: await git.diff("working", readOptionalString(input, "base")) }
       },
     },
     {
       name: "memory_auditor_preview",
       description:
-        "Build a typed plan from the last scan. Optional findingIds narrow it to selected findings. Returns operation IDs; nothing is applied.",
+        "Build a typed plan from this session's last scan. Optional findingIds narrow it to selected findings. Returns operation IDs; nothing is applied.",
       input: object({ findingIds: { type: "array", items: { type: "string" } } }),
-      async execute(input: unknown) {
+      async execute(input: unknown, context?: ToolContext) {
+        const { id, state } = session(context)
         const inventory = state.inventory ?? (await client.inventory())
         const findings = state.findings ?? scan(inventory.memories)
         state.inventory = inventory
@@ -127,7 +149,7 @@ export function createTools(
         const selected = readStrings(input, "findingIds")
         const chosen = selected.length === 0 ? findings : findings.filter((finding) => selected.includes(finding.id))
         const plan = buildPlan(inventory.bank, chosen, inventory.memories)
-        await plans.save(plan)
+        await plans.save(id, plan)
         if (plan.operations.length === 0) {
           return { content: `plan ${plan.id}: no automatic operations. ${findings.length} findings stay manual.` }
         }
@@ -135,7 +157,10 @@ export function createTools(
           content: [
             `plan: ${plan.id} (bank ${plan.bank}, ${plan.createdAt})`,
             `operations: ${plan.operations.length}`,
-            ...plan.operations.map((operation) => `- ${operation.id}: ${operation.kind} ${operation.memoryId} — "${text(operation.before)}"`),
+            ...plan.operations.map(
+              (operation) =>
+                `- ${operation.id}: ${operation.kind} ${operation.memoryId}${operation.keep ? ` (keeps ${operation.keep})` : ""} — "${excerpt(operation.before)}"`,
+            ),
             "Apply with memory_auditor_apply({ planId, operationIds }) after the user approves these exact IDs.",
           ].join("\n"),
         }
@@ -144,15 +169,16 @@ export function createTools(
     {
       name: "memory_auditor_apply",
       description:
-        "Apply approved operations from a stored plan. Requires the plan ID and the exact operation IDs the user approved; targets are re-read first.",
+        "Apply approved operations from a stored plan. Requires the plan ID and the exact operation IDs the user approved; targets and keepers are re-read first.",
       input: object({ planId: { type: "string" }, operationIds: { type: "array", items: { type: "string" } } }, [
         "planId",
         "operationIds",
       ]),
-      async execute(input: unknown) {
+      async execute(input: unknown, context?: ToolContext) {
+        const { id } = session(context)
         const planId = readString(input, "planId")
-        const plan = await plans.load(planId)
-        if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview first.`)
+        const plan = await plans.load(id, planId)
+        if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview in this session first.`)
         const report = await applyPlan(client, plan, readStrings(input, "operationIds"), { auditOnly: config.auditOnly })
         return {
           content: [
@@ -169,10 +195,11 @@ export function createTools(
         "planId",
         "operationIds",
       ]),
-      async execute(input: unknown) {
+      async execute(input: unknown, context?: ToolContext) {
+        const { id } = session(context)
         const planId = readString(input, "planId")
-        const plan = await plans.load(planId)
-        if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview first.`)
+        const plan = await plans.load(id, planId)
+        if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview in this session first.`)
         const report = await verifyPlan(client, plan, readStrings(input, "operationIds"))
         return {
           content: [
@@ -183,20 +210,6 @@ export function createTools(
       },
     },
   ]
-}
-
-function formatMemory(memory: MemoryUnit): string {
-  return [
-    `id: ${memory.id}`,
-    `state: ${memory.state ?? "valid"}`,
-    `type: ${memory.fact_type ?? "unknown"}`,
-    `document: ${memory.document_id ?? "none"}`,
-    `updated: ${memory.updated_at ?? memory.mentioned_at ?? memory.date ?? "unknown"}`,
-    memory.invalidation_reason ? `invalidated because: ${memory.invalidation_reason}` : "",
-    `text: ${text(memory.text)}`,
-  ]
-    .filter(Boolean)
-    .join("\n")
 }
 
 function readString(input: unknown, key: string): string {

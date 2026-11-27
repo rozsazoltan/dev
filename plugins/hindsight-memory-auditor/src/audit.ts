@@ -1,13 +1,21 @@
 import { createHash } from "node:crypto"
 import type { Finding, MemoryUnit, Operation, Plan } from "./types.ts"
 
-/** Lowercase, punctuation-free, whitespace-collapsed text used only for comparisons. */
+/** Loose text used for advisory checks such as length; never for retirement decisions. */
 export function normalize(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+/**
+ * Conservative identity for retirement: only whitespace collapses, so case, punctuation, operators
+ * and signs still distinguish `retries < 3` from `retries > 3`.
+ */
+export function strictKey(text: string): string {
+  return text.trim().replace(/\s+/g, " ")
 }
 
 function digest(input: string): string {
@@ -30,7 +38,7 @@ export function scan(memories: MemoryUnit[], options: { minTextLength?: number }
 
   const byText = new Map<string, MemoryUnit[]>()
   for (const memory of valid) {
-    const key = normalize(memory.text)
+    const key = strictKey(memory.text)
     if (!key) continue
     byText.set(key, [...(byText.get(key) ?? []), memory])
   }
@@ -95,12 +103,15 @@ export function buildPlan(bank: string, findings: Finding[], memories: MemoryUni
       if (memoryId === finding.keep) continue
       const memory = byId.get(memoryId)
       if (!memory) continue
+      const keeper = byId.get(finding.keep)
       operations.push({
         id: `invalidate-${memoryId}`,
         kind: "invalidate",
         memoryId,
         reason: "Duplicate of a newer memory with identical text (memory auditor)",
         before: memory.text,
+        keep: finding.keep,
+        keepBefore: keeper?.text ?? "",
       })
     }
   }

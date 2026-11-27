@@ -13,9 +13,13 @@ export function resolveConfig(raw: Record<string, unknown> | undefined, env: Nod
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(`apiUrl must be http or https, received ${url.protocol}`)
   }
+  const token = typeof options.token === "string" ? options.token : env.HINDSIGHT_API_TOKEN
+  // RFC 6750: a bearer token never travels in cleartext off the loopback interface.
+  if (token && url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname)) {
+    throw new Error("A bearer token requires https unless apiUrl points at a loopback host")
+  }
   const bank = typeof options.bank === "string" ? options.bank.trim() : (env.HINDSIGHT_BANK_ID ?? "").trim()
   if (!bank) throw new Error("A Hindsight bank must be configured: set the plugin option `bank` or HINDSIGHT_BANK_ID")
-  const token = typeof options.token === "string" ? options.token : env.HINDSIGHT_API_TOKEN
   return {
     apiUrl: apiUrl.replace(/\/+$/, ""),
     bank,
