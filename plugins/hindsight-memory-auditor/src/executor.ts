@@ -11,6 +11,9 @@ export async function applyPlan(
   approvedOperationIds: readonly string[],
   options: { auditOnly: boolean },
 ): Promise<ApplyReport> {
+  if (plan.bank !== client.bank) {
+    throw new Error(`Plan ${plan.id} belongs to bank ${plan.bank}, but this session is scoped to ${client.bank}`)
+  }
   if (options.auditOnly) {
     throw new Error("Audit-only mode is on: nothing was applied. Set the plugin option `auditOnly: false` to allow approved corrections.")
   }
@@ -76,6 +79,9 @@ async function applyOperation(client: HindsightClient, operation: Operation): Pr
 
 /** Reads every affected memory back and reports the observed state. */
 export async function verifyPlan(client: HindsightClient, plan: Plan, operationIds: readonly string[]): Promise<ApplyReport> {
+  if (plan.bank !== client.bank) {
+    throw new Error(`Plan ${plan.id} belongs to bank ${plan.bank}, but this session is scoped to ${client.bank}`)
+  }
   const approved = new Set(operationIds)
   const results: OperationResult[] = []
   for (const operation of plan.operations) {

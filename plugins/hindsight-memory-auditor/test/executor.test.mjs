@@ -18,6 +18,7 @@ function fakeClient(overrides = {}) {
   const calls = []
   return {
     calls,
+    bank: "bank",
     async getMemory(id) {
       return overrides[id] ?? { id, text: "same text", state: "valid" }
     },
@@ -77,6 +78,11 @@ test("a duplicate is skipped when its keeper changed", async () => {
   const report = await applyPlan(client, guarded, ["invalidate-a"], { auditOnly: false })
   assert.equal(report.results[0].status, "skipped")
   assert.match(report.results[0].detail, /keeper changed/)
+})
+
+test("a plan from another bank is refused", async () => {
+  const client = { ...fakeClient(), bank: "other" }
+  await assert.rejects(() => applyPlan(client, plan, ["invalidate-a"], { auditOnly: false }), /belongs to bank bank/)
 })
 
 test("verify reports the observed state", async () => {

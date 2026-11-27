@@ -34,16 +34,16 @@ export class HindsightClient {
     return this.#request<MemoryUnit>("GET", `/memories/${encodeURIComponent(memoryId)}`)
   }
 
-  /** Soft-retires a memory: excluded from recall and consolidation, still readable and restorable. */
-  async invalidate(memoryId: string, reason: string): Promise<MemoryUnit> {
-    return this.#request<MemoryUnit>("PATCH", `/memories/${encodeURIComponent(memoryId)}`, {
-      state: "invalidated",
-      reason,
-    })
+  /**
+   * Soft-retires a memory: excluded from recall and consolidation, still readable and restorable.
+   * The response body is not trusted; memory_auditor_verify reads the state back instead.
+   */
+  async invalidate(memoryId: string, reason: string): Promise<void> {
+    await this.#send("PATCH", `/memories/${encodeURIComponent(memoryId)}`, { state: "invalidated", reason })
   }
 
-  async restore(memoryId: string, reason: string): Promise<MemoryUnit> {
-    return this.#request<MemoryUnit>("PATCH", `/memories/${encodeURIComponent(memoryId)}`, { state: "valid", reason })
+  async restore(memoryId: string, reason: string): Promise<void> {
+    await this.#send("PATCH", `/memories/${encodeURIComponent(memoryId)}`, { state: "valid", reason })
   }
 
   /** Pages through the whole bank up to `maxMemories`; `truncated` marks an incomplete inventory. */
@@ -81,6 +81,16 @@ export class HindsightClient {
   }
 
   async #request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const response = await this.#fetchResponse(method, path, body)
+    return (await response.json()) as T
+  }
+
+  /** Sends a mutation and ignores the body, so a changed response shape cannot break a request that worked. */
+  async #send(method: string, path: string, body: unknown): Promise<void> {
+    await this.#fetchResponse(method, path, body)
+  }
+
+  async #fetchResponse(method: string, path: string, body?: unknown): Promise<Response> {
     const headers: Record<string, string> = { accept: "application/json" }
     if (body !== undefined) headers["content-type"] = "application/json"
     if (this.#config.token) headers.authorization = `Bearer ${this.#config.token}`
@@ -93,6 +103,6 @@ export class HindsightClient {
       const detail = await response.text().catch(() => "")
       throw new Error(`Hindsight ${method} ${path} failed with ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`)
     }
-    return (await response.json()) as T
+    return response
   }
 }

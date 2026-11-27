@@ -50,8 +50,7 @@ test("inventory marks truncation at maxMemories", async () => {
 test("invalidate PATCHes the fixed bank with the configured route", async () => {
   const fetchImpl = fakeFetch({ "/v1/default/banks/bank%3A%3Ax/memories/abc": () => [200, { id: "abc", text: "t", state: "invalidated" }] })
   const client = new HindsightClient(config, fetchImpl)
-  const memory = await client.invalidate("abc", "duplicate")
-  assert.equal(memory.state, "invalidated")
+  await client.invalidate("abc", "duplicate")
   assert.equal(fetchImpl.calls[0].method, "PATCH")
   assert.deepEqual(JSON.parse(fetchImpl.calls[0].body), { state: "invalidated", reason: "duplicate" })
 })
