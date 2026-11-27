@@ -1,4 +1,4 @@
-import { buildPlan, scan } from "./audit.ts"
+import { buildPlan, curatable, digestId, packPlan, scan } from "./audit.ts"
 import { applyPlan, verifyPlan } from "./executor.ts"
 import { createEvidence, createGitEvidence, formatEvidence, type VcsLike } from "./evidence.ts"
 import type { HindsightClient } from "./hindsight.ts"
@@ -185,6 +185,78 @@ export function createTools(
             ...page.items.map(
               (entity) => `- ${entity.canonical_name} (${entity.mention_count} mentions, ${entity.id})`,
             ),
+          ].join("\n"),
+        }
+      },
+    },
+    {
+      name: "memory_auditor_propose",
+      options: { codemode: false },
+      description:
+        "Propose one curated change: `merge` two or more memories into one retained fact (the sources are retired), or `edit` one memory's text. Nothing is applied; the returned plan must be approved by operation ID.",
+      input: object(
+        {
+          kind: { type: "string", enum: ["merge", "edit"] },
+          memoryIds: { type: "array", items: { type: "string" } },
+          text: { type: "string" },
+          context: { type: "string" },
+          reason: { type: "string" },
+        },
+        ["kind", "memoryIds", "text"],
+      ),
+      async execute(input: unknown, context?: ToolContext) {
+        const { id } = session(context)
+        const kind = readString(input, "kind")
+        const memoryIds = readStrings(input, "memoryIds")
+        const text = readString(input, "text")
+        const reason = readOptionalString(input, "reason") ?? "Curated by the memory auditor"
+        const context_ = readOptionalString(input, "context")
+        const memories = await Promise.all(memoryIds.map((memoryId) => client.getMemory(memoryId)))
+        for (const memory of memories) {
+          if ((memory.state ?? "valid") !== "valid") throw new Error(`Memory ${memory.id} is not valid.`)
+          if (!curatable(memory)) throw new Error(`Memory ${memory.id} is not curatable (fact_type: ${memory.fact_type ?? "unknown"}).`)
+        }
+        if (kind === "edit") {
+          if (memories.length !== 1) throw new Error("edit takes exactly one memoryId")
+          const target = memories[0]
+          const operationId = digestId("edit", `${target.id}:${target.text}:${text}`)
+          const plan = packPlan(client.bank, [], [
+            { id: operationId, kind: "edit", memoryId: target.id, reason, before: target.text, text },
+          ])
+          await plans.save(id, plan)
+          return { content: `plan: ${plan.id}\n- ${operationId}: edit ${target.id}\n  before: "${excerpt(target.text)}"\n  after:  "${excerpt(text)}"` }
+        }
+        if (kind !== "merge") throw new Error("kind must be merge or edit")
+        if (memories.length < 2) throw new Error("merge takes at least two memoryIds")
+        const operationId = digestId(
+          "merge",
+          JSON.stringify({
+            sources: memories.map((memory) => ({ id: memory.id, text: memory.text })),
+            text,
+            context: context_,
+            reason,
+          }),
+        )
+        const plan = packPlan(client.bank, [], [
+          {
+            id: operationId,
+            kind: "merge",
+            memoryId: memories[0].id,
+            reason,
+            before: memories[0].text,
+            sources: memories.map((memory) => ({ id: memory.id, text: memory.text })),
+            text,
+            context: context_,
+            documentId: `memory-auditor-${operationId}`,
+          },
+        ])
+        await plans.save(id, plan)
+        return {
+          content: [
+            `plan: ${plan.id}`,
+            `- ${operationId}: merge ${memories.length} memories into one, then retire the sources`,
+            `  keeps: "${excerpt(text)}"`,
+            ...memories.map((memory) => `  retires ${memory.id}: "${excerpt(memory.text)}"`),
           ].join("\n"),
         }
       },

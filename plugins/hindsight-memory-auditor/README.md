@@ -9,12 +9,13 @@ repository and applies only the corrections you approve.
 - Triages deterministically: duplicates only when the trimmed text is byte-identical (case, punctuation, operators and quoted whitespace all distinguish facts), fragments shorter than 40 characters, and observations whose source memories were retired (`STALE_DERIVED`).
 - Leaves judgement about truth to the agent and to repository evidence; nothing is retired from a
   heuristic alone.
+- Proposes curated changes the heuristics cannot express: `merge` several memories into one retained fact and retire the sources, or `edit` one memory's text (which re-embeds it).
 - Turns accepted findings into typed operations, each bound to a memory ID, its current text and a
   reason.
 - Applies only the operation IDs you approve, re-reading each target first, then verifies the
   observed state.
 
-Invalidation is the only mutation, and it is the reversible one: Hindsight keeps the memory
+Invalidation is the reversible mutation: Hindsight keeps the memory
 readable and restorable, and excludes it from recall and consolidation.
 
 ## Install
@@ -74,6 +75,15 @@ Select **Memory Auditor** in the agent picker, then:
 6. Approve the exact IDs.
 6. `memory_auditor_apply`, then `memory_auditor_verify`.
 
+## Merge and edit
+
+`memory_auditor_propose({ kind: "merge", memoryIds, text, context?, reason? })` builds a plan that
+retains the new text under `document_id: memory-auditor-<operation>` and retires every source in the
+same approved batch; a source that changed after planning aborts the whole operation.
+`kind: "edit"` rewrites one memory's text and warns that Hindsight re-embeds it and drops derived
+observations. Both are verified by reading back the retained document, the retired sources or the
+rewritten text.
+
 ## Tool visibility
 
 The auditor tools are registered as direct tools, not Code Mode tools. The guard allows only the
@@ -103,8 +113,13 @@ use; registering directly keeps the tools reachable while the guard stays strict
   `memory_auditor_apply`. Plans persist in plugin storage, last five per session, so an approval survives a restart and sessions stay isolated.
 - Classification is heuristic plus agent reasoning; contradictions and outdated facts need human
   evidence, and the tool reports them instead of guessing.
-- Editing a memory re-embeds it and drops its derived observations; reprocessing a source document
-  can recreate a retired fact. The plugin never reprocesses, and it does not edit text.
+- `edit` re-embeds a memory and drops its derived observations; a `merge` retains what Hindsight
+  extracts from the submitted text, so the stored memories can be split or reworded, and verification
+  checks that a valid replacement exists rather than that its text matches byte for byte.
+- Apply is check-then-write for every operation: Hindsight has no versioned precondition, so a
+  concurrent writer that changes a target or a source between the read and the write is not
+  detected. `restore` and `edit` are the recovery paths.
+- Reprocessing a source document can recreate a retired fact; the plugin never reprocesses.
 - Verified against Hindsight's local server (`/v1/default/banks/...`). A remote deployment needs
   `apiUrl` and, if enforced, a token.
 

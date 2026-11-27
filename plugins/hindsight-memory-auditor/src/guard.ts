@@ -21,6 +21,7 @@ const ALLOWED = new Set([
   "hindsight_search_pages",
   "hindsight_read_page",
   "hindsight_list_pages",
+  "memory_auditor_propose",
   "memory_auditor_preview",
   "memory_auditor_apply",
   "memory_auditor_verify",

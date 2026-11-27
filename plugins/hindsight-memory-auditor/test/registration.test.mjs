@@ -13,7 +13,7 @@ const storage = { get: async () => undefined, set: async () => {} }
 test("every auditor tool is registered directly, not behind Code Mode", async () => {
   const root = await mkdtemp(join(tmpdir(), "tools-"))
   const tools = createTools(client, config, new Map(), root, new PlanStore(storage))
-  assert.equal(tools.length, 10)
+  assert.equal(tools.length, 11)
   for (const tool of tools) {
     assert.equal(tool.options?.codemode, false, `${tool.name} must be a direct tool`)
   }
