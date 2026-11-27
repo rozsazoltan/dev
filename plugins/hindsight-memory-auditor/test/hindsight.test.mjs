@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { HindsightClient } from "../src/hindsight.ts"
-import { resolveConfig, assertBank } from "../src/config.ts"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { resolveConfig, assertBank, expandBankTemplate } from "../src/config.ts"
 
 const config = { apiUrl: "http://hindsight.test:8890", bank: "bank::x", auditOnly: true, pageSize: 2, maxMemories: 10 }
 
@@ -78,12 +81,28 @@ test("client surfaces HTTP failures with status and detail", async () => {
   await assert.rejects(() => client.getMemory("abc"), /500.*boom/s)
 })
 
-test("resolveConfig requires an explicit bank and rejects other schemes", () => {
-  assert.throws(() => resolveConfig({}, {}), /bank must be configured/)
-  assert.equal(resolveConfig({}, { HINDSIGHT_BANK_ID: "b" }).bank, "b")
-  assert.throws(() => resolveConfig({ apiUrl: "ftp://x", bank: "b" }, {}), /http or https/)
-  assert.equal(resolveConfig({ bank: "b" }, {}).auditOnly, true)
-  assert.equal(resolveConfig({ bank: "b", auditOnly: false }, {}).auditOnly, false)
+const noIntegration = "/tmp/opencode/does-not-exist-coding-agent.json"
+
+test("resolveConfig requires a bank when nothing can be resolved", () => {
+  assert.throws(() => resolveConfig({}, {}, undefined, noIntegration), /No Hindsight bank/)
+  assert.equal(resolveConfig({}, { HINDSIGHT_BANK_ID: "b" }, undefined, noIntegration).bank, "b")
+  assert.throws(() => resolveConfig({ apiUrl: "ftp://x", bank: "b" }, {}, undefined, noIntegration), /http or https/)
+  assert.equal(resolveConfig({ bank: "b" }, {}, undefined, noIntegration).auditOnly, true)
+  assert.equal(resolveConfig({ bank: "b", auditOnly: false }, {}, undefined, noIntegration).auditOnly, false)
+})
+
+test("resolveConfig expands the integration bank template for the project", () => {
+  const dir = mkdtempSync(join(tmpdir(), "coding-agents-"))
+  const path = join(dir, "coding-agent.json")
+  writeFileSync(path, JSON.stringify({ apiUrl: "http://127.0.0.1:8890", bankIdTemplate: "coding-agent::host::{gitProject}" }))
+  const config = resolveConfig({}, {}, "dev", path)
+  assert.equal(config.bank, "coding-agent::host::dev")
+  assert.equal(config.apiUrl, "http://127.0.0.1:8890")
+  assert.throws(() => resolveConfig({}, {}, "dev", noIntegration), /No Hindsight bank/)
+})
+
+test("expandBankTemplate refuses unknown placeholders", () => {
+  assert.throws(() => expandBankTemplate("bank::{workspace}", "dev"), /Unsupported bankIdTemplate/)
 })
 
 test("a bearer token is refused over non-loopback http", () => {

@@ -39,26 +39,27 @@ readable and restorable, and excludes it from recall and consolidation.
    }
    ```
 
-3. Configure the bank. The bank is never guessed from the directory name:
+3. Configure the plugin. The bank and the server come from the same configuration the Hindsight
+   coding-agent integration already uses (`~/.hindsight/coding-agent.json`), so no bank needs to be
+   written by hand:
 
    ```jsonc
    {
      "plugins": [
        {
-         "path": "rozsazoltan/dev#<sha>::path:plugins/hindsight-memory-auditor",
-         "options": {
-           "apiUrl": "http://127.0.0.1:8890",
-           "bank": "coding-agent::centos::dev",
-           "auditOnly": true
-         }
+         "package": "rozsazoltan/dev#<sha>::path:plugins/hindsight-memory-auditor",
+         "options": { "auditOnly": true }
        }
      ]
    }
    ```
 
-   `bank` may also come from `HINDSIGHT_BANK_ID` and the bearer token from `HINDSIGHT_API_TOKEN`.
-   Without a bank the plugin refuses to start its tools instead of falling back to the first bank
-   the server lists.
+   Resolution order for the bank: the `bank` option, then `HINDSIGHT_BANK_ID`, then
+   `bankIdTemplate` from the integration config with `{gitProject}` expanded to the project
+   directory name (`coding-agent::centos::{gitProject}` becomes `coding-agent::centos::dev`). An
+   unknown template placeholder stops resolution instead of guessing. `apiUrl` falls back to the
+   integration's `apiUrl`, and the bearer token comes from `HINDSIGHT_API_TOKEN`.
+   `memory_auditor_status` reports whether the resolved bank actually exists on the server.
 
 ## Use
 

@@ -50,9 +50,11 @@ export function createTools(
         "Report the Memory Auditor scope: selected Hindsight bank, server, audit-only flag, and what the current session can change.",
       input: object({}),
       async execute() {
+        const banks = await client.banks().catch((): string[] => [])
+        const present = banks.length === 0 ? "unknown (bank list unavailable)" : banks.includes(client.bank) ? "yes" : "NO — check the bank id or the integration template"
         return {
           content: [
-            `bank: ${client.bank}`,
+            `bank: ${client.bank} (exists on server: ${present})`,
             `server: ${new URL(config.apiUrl).host}`,
             `auditOnly: ${config.auditOnly}`,
             `pageSize: ${config.pageSize}`,
