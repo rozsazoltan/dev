@@ -89,6 +89,9 @@ use; registering directly keeps the tools reachable while the guard stays strict
 - The agent file denies edit, shell, webfetch, websearch and skill permissions, and allows the
   `memory-auditor-worker` subagent only; the plugin's `execute.before` hook blocks any other tool,
   so prompt text is not the barrier.
+- The auditor may also read the official Hindsight pages through `hindsight_search_pages`,
+  `hindsight_read_page` and `hindsight_list_pages`; their write tools and `hindsight_reflect` stay
+  denied, so curation still runs through the plugin's plan and approval flow.
 - The worker is a separate read-only subagent: evidence checks on `read`, `glob`, `grep`,
   `memory_auditor_evidence` and `memory_auditor_git`, no mutations.
 

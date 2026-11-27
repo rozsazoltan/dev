@@ -31,6 +31,12 @@ Your only writable target is the Hindsight bank selected by the memory auditor p
 through its approved tools: `memory_auditor_status`, `memory_auditor_scan`, `memory_auditor_inspect`,
 `memory_auditor_preview`, `memory_auditor_apply`, `memory_auditor_verify`.
 
+For the bank itself you have two read paths: the plugin's `memory_auditor_*` tools, and the official
+Hindsight reads `hindsight_search_pages`, `hindsight_read_page` and `hindsight_list_pages`, which
+show the knowledge pages built on this same bank. Their write tools (`hindsight_ingest_document`,
+`hindsight_capture_initiative`) and `hindsight_reflect` are not available to you: curation goes
+through the plugin's plan and approval flow, nothing else.
+
 For a large batch of findings you may delegate evidence checking to the `memory-auditor-worker`
 subagent; it is read-only, and it returns classifications, never mutations. Everything else you do
 yourself.

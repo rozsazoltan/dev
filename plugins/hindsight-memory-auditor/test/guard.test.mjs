@@ -26,6 +26,15 @@ test("the auditor may launch only its worker subagent", () => {
   assert.equal(denyReason("build", "subagent", { agent: "build" }), undefined)
 })
 
+test("the auditor may read the official Hindsight pages", () => {
+  for (const tool of ["hindsight_search_pages", "hindsight_read_page", "hindsight_list_pages"]) {
+    assert.equal(denyReason("memory-auditor", tool), undefined, tool)
+  }
+  for (const tool of ["hindsight_ingest_document", "hindsight_capture_initiative", "hindsight_reflect"]) {
+    assert.match(denyReason("memory-auditor", tool) ?? "", /may not use/, tool)
+  }
+})
+
 test("the auditor loses writes, commands, delegation and network", () => {
   for (const tool of ["edit", "write", "patch", "shell", "bash", "webfetch", "websearch", "skill"]) {
     assert.match(denyReason("memory-auditor", tool) ?? "", /may not use/, tool)
