@@ -9,21 +9,29 @@ test("other agents keep every tool", () => {
 })
 
 test("the auditor keeps reads and its own tools", () => {
-  for (const tool of ["read", "glob", "grep", "memory_auditor_scan", "memory_auditor_apply"]) {
+  for (const tool of ["read", "glob", "grep", "memory_auditor_scan", "memory_auditor_inventory", "memory_auditor_assign", "memory_auditor_report", "memory_auditor_apply"]) {
     assert.equal(denyReason("memory-auditor", tool), undefined, tool)
   }
 })
 
-test("qualified tool names still match the allowlist", () => {
-  assert.equal(denyReason("memory-auditor", "hindsight-memory-auditor.memory_auditor_scan"), undefined)
+test("foreign names cannot inherit a registered tool's permission through suffix matching", () => {
+  assert.match(denyReason("memory-auditor", "foreign.read"), /may not use/)
+  assert.match(denyReason("memory-auditor-worker", "foreign.memory_auditor_submit"), /may not use/)
   assert.match(denyReason("memory-auditor", "hindsight-memory-auditor.shell") ?? "", /may not use/)
 })
 
-test("the auditor may launch only its worker subagent", () => {
-  assert.equal(denyReason("memory-auditor", "subagent", { agent: "memory-auditor-worker" }), undefined)
-  assert.match(denyReason("memory-auditor", "subagent", { agent: "build" }) ?? "", /only launch/)
-  assert.match(denyReason("memory-auditor", "subagent") ?? "", /only launch/)
+test("all generic delegation is blocked, including worker session continuation", () => {
+  assert.match(denyReason("memory-auditor", "subagent", { agent: "memory-auditor-worker" }), /memory_auditor_assign/)
+  assert.match(denyReason("memory-auditor", "task", { sessionID: "existing" }), /memory_auditor_assign/)
+  assert.match(denyReason("memory-auditor", "subagent"), /memory_auditor_assign/)
   assert.equal(denyReason("build", "subagent", { agent: "build" }), undefined)
+})
+
+test("worker runtime allowlist excludes mutation and delegation wrappers", () => {
+  for (const tool of ["memory_auditor_apply", "memory_auditor_propose", "memory_auditor_preview", "hindsight_ingest_document", "execute", "ctx_execute", "shell", "subagent", "task", "memory_auditor_inventory"]) {
+    assert.match(denyReason("memory-auditor-worker", tool), /may not use/)
+  }
+  assert.equal(denyReason("memory-auditor-worker", "memory_auditor_submit"), undefined)
 })
 
 test("the auditor may read the official Hindsight pages", () => {

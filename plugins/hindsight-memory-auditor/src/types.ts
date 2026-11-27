@@ -3,6 +3,7 @@
 export interface MemoryUnit {
   id: string
   text: string
+  type?: string
   context?: string
   fact_type?: string
   document_id?: string | null
@@ -14,6 +15,9 @@ export interface MemoryUnit {
   metadata?: Record<string, unknown>
   source_memory_ids?: string[]
   invalidation_reason?: string | null
+  history?: unknown[]
+  source_memories?: unknown[]
+  observation_scopes?: unknown[]
 }
 
 export interface Inventory {
@@ -22,6 +26,11 @@ export interface Inventory {
   valid: number
   invalidated: number
   truncated: boolean
+  revision: string
+  changed: boolean
+  missingIds: string[]
+  complete: boolean
+  warnings: string[]
   memories: MemoryUnit[]
 }
 
@@ -43,6 +52,13 @@ export type OperationKind = "invalidate" | "restore" | "merge" | "edit"
 export interface OperationSource {
   id: string
   text: string
+  context?: string
+  fact_type?: string
+  state?: string
+  tags?: string[]
+  date?: string
+  provenance?: unknown
+  snapshot?: MemoryUnit
 }
 
 export interface Operation {
@@ -61,6 +77,8 @@ export interface Operation {
   text?: string
   context?: string
   documentId?: string
+  beforeSnapshot?: MemoryUnit
+  keeperSnapshot?: MemoryUnit
 }
 
 export interface Plan {
@@ -89,7 +107,7 @@ export interface AuditorConfig {
   apiUrl: string
   bank: string
   token?: string
-  auditOnly: boolean
   pageSize: number
   maxMemories: number
+  requestTimeoutMs: number
 }

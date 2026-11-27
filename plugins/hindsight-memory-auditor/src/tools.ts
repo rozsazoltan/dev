@@ -4,6 +4,9 @@ import { createEvidence, createGitEvidence, formatEvidence, type VcsLike } from 
 import type { HindsightClient } from "./hindsight.ts"
 import type { PlanStore } from "./plans.ts"
 import type { AuditorConfig, Finding, Inventory } from "./types.ts"
+import type { Operation, Plan } from "./types.ts"
+import { NativeApproval, type ApprovalCall } from "./approval.ts"
+import { AuditTasks, CHECKS, type Assignment, type TaskRow } from "./tasks.ts"
 
 /** Audits are per session: one conversation never reads or clears another's findings. */
 /** `null` means the lookup failed; an empty list means the server really has no banks. */
@@ -15,11 +18,10 @@ export function describeBankPresence(banks: string[] | null, bank: string): stri
 export interface SessionState {
   inventory?: Inventory
   findings?: Finding[]
+  planId?: string
 }
 
-interface ToolContext {
-  sessionID?: string
-}
+type ToolContext = Partial<ApprovalCall>
 
 const excerpt = (value: string) => (value.length > 240 ? `${value.slice(0, 240)}…` : value)
 
@@ -38,35 +40,36 @@ export function createTools(
   root: string,
   plans: PlanStore,
   vcs?: VcsLike,
+  runtime?: { tasks: AuditTasks; approval: NativeApproval },
 ) {
   const evidence = createEvidence(root)
   const git = vcs ? createGitEvidence(vcs, root) : undefined
 
   function session(context?: ToolContext): { id: string; state: SessionState } {
-    const id = context?.sessionID ?? "default"
+    const id = context?.sessionID
+    if (!id) throw new Error("A real tool session is required.")
     const state = sessions.get(id) ?? {}
     sessions.set(id, state)
     return { id, state }
   }
 
-  return [
+  const tools = [
     {
       name: "memory_auditor_status",
       options: { codemode: false },
       description:
-        "Report the Memory Auditor scope: selected Hindsight bank, server, audit-only flag, and what the current session can change.",
+        "Report the selected bank and mandatory once-only plan confirmation boundary.",
       input: object({}),
-      async execute() {
-        const banks = await client.banks().catch((): null => null)
+      async execute(_input: unknown, context?: ToolContext) {
+        const banks = await client.withSignal(context?.signal).banks().catch((): null => null)
         const present = describeBankPresence(banks, client.bank)
         return {
           content: [
             `bank: ${client.bank} (exists on server: ${present})`,
             `server: ${new URL(config.apiUrl).host}`,
-            `auditOnly: ${config.auditOnly}`,
             `pageSize: ${config.pageSize}`,
             `maxMemories: ${config.maxMemories}`,
-            `mutations: ${config.auditOnly ? "disabled (auditOnly)" : "only through an approved plan"}`,
+            "mutations: exact immutable plan and fresh native once-only confirmation required",
           ].join("\n"),
         }
       },
@@ -76,14 +79,15 @@ export function createTools(
       options: { codemode: false },
       description:
         "Read the whole bank and the deterministic findings (duplicates, short fragments, observations with retired sources). Read-only; it does not change any memory.",
-      input: object({}),
-      async execute(_input: unknown, context?: ToolContext) {
+      input: object({ checks: { type: "array", items: { type: "string", enum: CHECKS } } }),
+      async execute(input: unknown, context?: ToolContext) {
         const { id, state } = session(context)
-        const inventory = await client.inventory()
+        const inventory = await client.withSignal(context?.signal).inventory()
         const findings = scan(inventory.memories)
         state.inventory = inventory
         state.findings = findings
-        await plans.clear(id)
+        const checks = readStrings(input, "checks")
+        const run = runtime ? await runtime.tasks.start(id, inventory, checks.length ? checks : CHECKS) : undefined
         const counts = findings.reduce<Record<string, number>>((all, finding) => {
           all[finding.state] = (all[finding.state] ?? 0) + 1
           return all
@@ -91,6 +95,9 @@ export function createTools(
         return {
           content: [
             `bank: ${inventory.bank}`,
+            `run: ${run?.id ?? "runtime unavailable"}; revision: ${inventory.revision}`,
+            `inventory complete: ${inventory.complete}; semantic checks complete: false`,
+            ...inventory.warnings,
             `scanned: ${inventory.scanned} (valid ${inventory.valid}, invalidated ${inventory.invalidated})${inventory.truncated ? " — truncated at maxMemories, coverage is partial" : ""}`,
             `findings: ${findings.length} ${JSON.stringify(counts)}`,
             ...findings.map((finding) => `- [${finding.state}] ${finding.id} on ${finding.memoryIds.join(",")}: ${excerpt(finding.detail)}`),
@@ -103,22 +110,22 @@ export function createTools(
       options: { codemode: false },
       description:
         "Page through the raw memory units of the whole bank with their type, state, dates and text, so the auditor can analyse every memory rather than only findings.",
-      input: object({ offset: { type: "number" }, limit: { type: "number" }, state: { type: "string" }, factType: { type: "string" } }),
-      async execute(input: unknown) {
+      input: object({ runId: { type: "string" }, offset: { type: "number" }, limit: { type: "number" }, state: { type: "string" }, factType: { type: "string" } }),
+      async execute(input: unknown, context?: ToolContext) {
+        const { id, state: stored } = session(context)
         const offset = readNumber(input, "offset", 0, 1_000_000)
-        const limit = readNumber(input, "limit", 50, 200)
+        const limit = Math.max(1, readNumber(input, "limit", 25, 100))
         const state = readOptionalString(input, "state")
         const factType = readOptionalString(input, "factType")
-        const page = await client.listMemories({ limit, offset, ...(state ? { state } : {}) })
-        const items = (page.items ?? []).filter((memory) => !factType || memory.fact_type === factType)
+        const inventory = runtime
+          ? (await runtime.tasks.run(id, readOptionalString(input, "runId"))).inventory
+          : stored.inventory
+        if (!inventory) throw new Error("Scan before reading the inventory revision.")
+        const matching = inventory.memories.filter((memory) => (!factType || memory.fact_type === factType) && (!state || memory.state === state))
+        const items = matching.slice(offset, offset + limit)
         return {
-          content: [
-            `offset ${offset}, ${items.length} of ${page.total ?? "?"} matching, ${items.length} shown`,
-            ...items.map(
-              (memory) =>
-                `- ${memory.id} [${memory.fact_type ?? "unknown"}/${memory.state ?? "valid"}${memory.document_id ? `, doc ${memory.document_id}` : ""}] ${excerpt(memory.text)}`,
-            ),
-          ].join("\n"),
+          content: JSON.stringify({ revision: inventory.revision, complete: inventory.complete, warnings: inventory.warnings,
+            offset, total: matching.length, nextOffset: offset + items.length < matching.length ? offset + items.length : null, items }, null, 2),
         }
       },
     },
@@ -127,21 +134,10 @@ export function createTools(
       options: { codemode: false },
       description: "Show one memory with its provenance, state, invalidation reason and full text.",
       input: object({ memoryId: { type: "string" } }, ["memoryId"]),
-      async execute(input: unknown) {
-        const memory = await client.getMemory(readString(input, "memoryId"))
+      async execute(input: unknown, context?: ToolContext) {
+        const memory = await client.withSignal(context?.signal).getMemory(readString(input, "memoryId"))
         return {
-          content: [
-            `id: ${memory.id}`,
-            `state: ${memory.state ?? "valid"}`,
-            `type: ${memory.fact_type ?? "unknown"}`,
-            `document: ${memory.document_id ?? "none"}`,
-            `updated: ${memory.updated_at ?? memory.mentioned_at ?? memory.date ?? "unknown"}`,
-            memory.invalidation_reason ? `invalidated because: ${memory.invalidation_reason}` : "",
-            "text:",
-            memory.text,
-          ]
-            .filter(Boolean)
-            .join("\n"),
+          content: JSON.stringify(memory, null, 2),
         }
       },
     },
@@ -151,7 +147,7 @@ export function createTools(
       description:
         "Read-only evidence for the repository paths a finding depends on: existence, size and first line. Paths stay inside the project root.",
       input: object({ paths: { type: "array", items: { type: "string" } } }, ["paths"]),
-      async execute(input: unknown) {
+      async execute(input: unknown, context?: ToolContext) {
         const paths = readStrings(input, "paths")
         if (paths.length === 0) throw new Error("Invalid input: paths must list at least one repository path")
         return { content: formatEvidence(await evidence.inspect(paths), root) }
@@ -178,10 +174,10 @@ export function createTools(
       description:
         "Semantic search inside the bank: ranked by meaning, not keywords. Use it to find related memories for a finding instead of scanning text.",
       input: object({ query: { type: "string" }, limit: { type: "number" } }, ["query"]),
-      async execute(input: unknown) {
+      async execute(input: unknown, context?: ToolContext) {
         const query = readString(input, "query")
         const limit = readNumber(input, "limit", 10, 50)
-        const results = await client.recall(query, limit)
+        const results = await client.withSignal(context?.signal).recall(query, limit)
         return {
           content: [
             `query: ${query} (${results.length} results)`,
@@ -199,10 +195,10 @@ export function createTools(
       description:
         "List the entities the bank tracks with their mention counts, so conflicting or outdated facts can be grouped by subject instead of by wording.",
       input: object({ limit: { type: "number" }, offset: { type: "number" } }),
-      async execute(input: unknown) {
+      async execute(input: unknown, context?: ToolContext) {
         const limit = readNumber(input, "limit", 50, 200)
         const offset = readNumber(input, "offset", 0, 100000)
-        const page = await client.entities({ limit, offset })
+        const page = await client.withSignal(context?.signal).entities({ limit, offset })
         return {
           content: [
             `entities: ${page.items.length} of ${page.total} (offset ${offset})`,
@@ -217,7 +213,7 @@ export function createTools(
       name: "memory_auditor_propose",
       options: { codemode: false },
       description:
-        "Propose one curated change: `merge` two or more memories into one retained fact (the sources are retired), or `edit` one memory's text. Nothing is applied; the returned plan must be approved by operation ID.",
+        "Build or append an exact correction to an immutable cumulative plan. Invalidate/restore require no text; edit/merge require replacement text. Nothing is written.",
       input: object(
         {
           kind: { type: "string", enum: ["merge", "edit", "invalidate", "restore"] },
@@ -225,96 +221,49 @@ export function createTools(
           text: { type: "string" },
           context: { type: "string" },
           reason: { type: "string" },
+          planId: { type: "string" },
         },
-        ["kind", "memoryIds", "text"],
+        ["kind", "memoryIds", "reason"],
       ),
       async execute(input: unknown, context?: ToolContext) {
-        const { id } = session(context)
+        const { id, state } = session(context)
         const kind = readString(input, "kind")
         const memoryIds = readStrings(input, "memoryIds")
-        const text = readString(input, "text")
-        const reason = readOptionalString(input, "reason") ?? "Curated by the memory auditor"
+        if (!["merge", "edit", "invalidate", "restore"].includes(kind) || !memoryIds.length ||
+            new Set(memoryIds).size !== memoryIds.length || memoryIds.some((id) => !id.trim())) throw new Error("Distinct target IDs and a supported operation kind are required.")
+        const text = kind === "edit" || kind === "merge" ? readString(input, "text") : undefined
+        const reason = readString(input, "reason")
         const context_ = readOptionalString(input, "context")
-        const memories = await Promise.all(memoryIds.map((memoryId) => client.getMemory(memoryId)))
-        if (kind === "restore") {
-          if (memories.length === 0) throw new Error("restore takes at least one memoryId")
-          const operations = memories.map((memory) => ({
-            id: digestId("restore", `${memory.id}:${reason}`),
-            kind: "restore" as const,
-            memoryId: memory.id,
-            reason,
-            before: memory.text,
-          }))
-          const plan = packPlan(client.bank, [], operations)
-          await plans.save(id, plan)
-          return {
-            content: [`plan: ${plan.id}`, ...operations.map((operation) => `- ${operation.id}: restore ${operation.memoryId}`)].join("\n"),
-          }
-        }
+        if (context_ && kind !== "merge") throw new Error("Only merge can set retention context; other operations preserve existing context.")
+        const scoped = client.withSignal(context?.signal)
+        const memories = await Promise.all(memoryIds.map((memoryId) => scoped.getMemory(memoryId)))
         for (const memory of memories) {
-          if (kind !== "invalidate" && (memory.state ?? "valid") !== "valid") throw new Error(`Memory ${memory.id} is not valid.`)
+          if (memory.state !== (kind === "restore" ? "invalidated" : "valid")) throw new Error(`Memory ${memory.id} has the wrong state for ${kind}.`)
           if (!curatable(memory)) throw new Error(`Memory ${memory.id} is not curatable (fact_type: ${memory.fact_type ?? "unknown"}).`)
         }
-        if (kind === "invalidate") {
-          const operations = memories.map((memory) => ({
-            id: digestId("invalidate", `${memory.id}:${memory.text}:${reason}`),
-            kind: "invalidate" as const,
-            memoryId: memory.id,
-            reason,
-            before: memory.text,
-          }))
-          const plan = packPlan(client.bank, [], operations)
-          await plans.save(id, plan)
-          return {
-            content: [
-              `plan: ${plan.id}`,
-              ...operations.map((operation) => `- ${operation.id}: invalidate ${operation.memoryId} — "${excerpt(operations.find((item) => item.id === operation.id)?.before ?? "")}"`),
-            ].join("\n"),
-          }
-        }
-        if (kind === "edit") {
-          if (memories.length !== 1) throw new Error("edit takes exactly one memoryId")
-          const target = memories[0]
-          const operationId = digestId("edit", `${target.id}:${target.text}:${text}`)
-          const plan = packPlan(client.bank, [], [
-            { id: operationId, kind: "edit", memoryId: target.id, reason, before: target.text, text },
-          ])
-          await plans.save(id, plan)
-          return { content: `plan: ${plan.id}\n- ${operationId}: edit ${target.id}\n  before: "${excerpt(target.text)}"\n  after:  "${excerpt(text)}"` }
-        }
-        if (kind !== "merge") throw new Error("kind must be merge, edit, invalidate or restore")
-        if (memories.length < 2) throw new Error("merge takes at least two memoryIds")
-        const operationId = digestId(
-          "merge",
-          JSON.stringify({
-            sources: memories.map((memory) => ({ id: memory.id, text: memory.text })),
-            text,
-            context: context_,
-            reason,
-          }),
-        )
-        const plan = packPlan(client.bank, [], [
-          {
-            id: operationId,
-            kind: "merge",
-            memoryId: memories[0].id,
-            reason,
-            before: memories[0].text,
-            sources: memories.map((memory) => ({ id: memory.id, text: memory.text })),
-            text,
-            context: context_,
-            documentId: `memory-auditor-${operationId}`,
-          },
-        ])
+        if (kind === "edit" && memories.length !== 1) throw new Error("edit takes exactly one target.")
+        if (kind === "merge" && memories.length < 2) throw new Error("merge needs at least two source facts.")
+        const operations: Operation[] = kind === "merge" ? [{
+          id: digestId(kind, JSON.stringify({ memories, text, context_, reason })),
+          kind, memoryId: memories[0]!.id, reason, before: memories[0]!.text,
+          beforeSnapshot: memories[0],
+          sources: memories.map((memory) => ({ ...memory, snapshot: memory })),
+          text, context: context_,
+          documentId: `memory-auditor-${digestId("merge-document", JSON.stringify({ memories, text, context_, reason }))}`,
+        }] : memories.map((memory) => ({
+          id: digestId(kind, JSON.stringify({ memory, text, reason })),
+          kind: kind as "invalidate" | "restore" | "edit", memoryId: memory.id, reason,
+          before: memory.text, beforeSnapshot: memory, ...(text !== undefined ? { text } : {}),
+        }))
+        const parentId = readOptionalString(input, "planId")
+        const parent = parentId ? await plans.load(id, parentId) : undefined
+        if (parentId && !parent) throw new Error("The parent plan is unavailable or corrupt in this session.")
+        if (parent && parent.bank !== client.bank) throw new Error("The parent plan belongs to another bank.")
+        const combined = [...(parent?.operations ?? []), ...operations]
+        const plan = packPlan(client.bank, parent?.findings ?? [], combined)
         await plans.save(id, plan)
-        return {
-          content: [
-            `plan: ${plan.id}`,
-            `- ${operationId}: merge ${memories.length} memories into one, then retire the sources`,
-            `  keeps: "${excerpt(text)}"`,
-            ...memories.map((memory) => `  retires ${memory.id}: "${excerpt(memory.text)}"`),
-          ].join("\n"),
-        }
+        state.planId = plan.id
+        return { content: formatPlan(plan) }
       },
     },
     {
@@ -322,34 +271,33 @@ export function createTools(
       options: { codemode: false },
       description:
         "Build a typed plan from this session's last scan. Optional findingIds narrow it to selected findings. Returns operation IDs; nothing is applied.",
-      input: object({ findingIds: { type: "array", items: { type: "string" } } }),
+      input: object({ planId: { type: "string" }, findingIds: { type: "array", items: { type: "string" } } }),
       async execute(input: unknown, context?: ToolContext) {
         const { id, state } = session(context)
+        const planId = readOptionalString(input, "planId") ?? state.planId
+        if (planId) {
+          const existing = await plans.load(id, planId)
+          if (!existing) throw new Error("No immutable plan with that ID exists in this session.")
+          return { content: formatPlan(existing) }
+        }
         // One snapshot: a concurrent scan must not pair new findings with an older inventory.
         const snapshot = { inventory: state.inventory, findings: state.findings }
-        const inventory = snapshot.inventory ?? (await client.inventory())
+        const inventory = snapshot.inventory ?? (runtime
+          ? (await runtime.tasks.run(id)).inventory : await client.withSignal(context?.signal).inventory())
         const findings =
           snapshot.inventory && snapshot.findings ? snapshot.findings : scan(inventory.memories)
         state.inventory = inventory
         state.findings = findings
         const selected = readStrings(input, "findingIds")
+        if (selected.some((id) => !findings.some((finding) => finding.id === id))) throw new Error("Unknown finding ID.")
         const chosen = selected.length === 0 ? findings : findings.filter((finding) => selected.includes(finding.id))
         const plan = buildPlan(inventory.bank, chosen, inventory.memories)
         await plans.save(id, plan)
+        state.planId = plan.id
         if (plan.operations.length === 0) {
           return { content: `plan ${plan.id}: no automatic operations. ${findings.length} findings stay manual.` }
         }
-        return {
-          content: [
-            `plan: ${plan.id} (bank ${plan.bank}, ${plan.createdAt})`,
-            `operations: ${plan.operations.length}`,
-            ...plan.operations.map(
-              (operation) =>
-                `- ${operation.id}: ${operation.kind} ${operation.memoryId}${operation.keep ? ` (keeps ${operation.keep})` : ""} — "${excerpt(operation.before)}"`,
-            ),
-            "Apply with memory_auditor_apply({ planId, operationIds }) after the user approves these exact IDs.",
-          ].join("\n"),
-        }
+        return { content: formatPlan(plan) }
       },
     },
     {
@@ -366,7 +314,19 @@ export function createTools(
         const planId = readString(input, "planId")
         const plan = await plans.load(id, planId)
         if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview in this session first.`)
-        const report = await applyPlan(client, plan, readStrings(input, "operationIds"), { auditOnly: config.auditOnly })
+        const operationIds = readStrings(input, "operationIds")
+        if (!operationIds.length || new Set(operationIds).size !== operationIds.length ||
+            operationIds.some((opId) => !plan.operations.some((operation) => operation.id === opId))) throw new Error("Select distinct known operation IDs before confirmation.")
+        if (!runtime || !context?.sessionID || !context.messageID || !context.id || !context.signal || context.agent !== "memory-auditor") {
+          throw new Error("Native primary-auditor confirmation context is required; nothing was applied.")
+        }
+        await runtime.approval.confirm({
+          server: config.apiUrl, bank: plan.bank, planHash: plan.hash, operationIds, summary: formatPlan(plan),
+        }, context as ApprovalCall)
+        const current = await plans.load(id, planId)
+        if (!current || current.hash !== plan.hash) throw new Error("Plan changed during confirmation; request fresh approval.")
+        context.signal.throwIfAborted()
+        const report = await applyPlan(client.withSignal(context.signal), current, operationIds, { signal: context.signal })
         return {
           content: [
             `plan: ${report.planId} (bank ${report.bank})`,
@@ -388,7 +348,7 @@ export function createTools(
         const planId = readString(input, "planId")
         const plan = await plans.load(id, planId)
         if (!plan) throw new Error(`Unknown plan ${planId}: run memory_auditor_preview in this session first.`)
-        const report = await verifyPlan(client, plan, readStrings(input, "operationIds"))
+        const report = await verifyPlan(client.withSignal(context?.signal), plan, readStrings(input, "operationIds"))
         return {
           content: [
             `plan: ${report.planId} (bank ${report.bank})`,
@@ -397,7 +357,115 @@ export function createTools(
         }
       },
     },
+    {
+      name: "memory_auditor_assign",
+      options: { codemode: false },
+      description: "Create one focused read-only worker task, bind it before prompting, and return its task/session IDs. One active assignment per primary session.",
+      input: object({
+        runId: { type: "string" }, check: { type: "string", enum: CHECKS },
+        memoryIds: { type: "array", items: { type: "string" } },
+        referenceIds: { type: "array", items: { type: "string" } },
+        evidencePaths: { type: "array", items: { type: "string" } },
+        allowRecall: { type: "boolean" }, allowGit: { type: "boolean" },
+        question: { type: "string" }, exclusions: { type: "string" },
+      }, ["check", "memoryIds", "question", "exclusions"]),
+      async execute(input: unknown, context?: ToolContext) {
+        const { id } = session(context)
+        if (!runtime || context?.agent !== "memory-auditor") throw new Error("Only the primary auditor can assign a bound worker.")
+        const task = await runtime.tasks.assign(id, {
+          runId: readOptionalString(input, "runId"), check: readString(input, "check"),
+          memoryIds: readStrings(input, "memoryIds"), referenceIds: readStrings(input, "referenceIds"),
+          evidencePaths: readStrings(input, "evidencePaths"), question: readString(input, "question"),
+          exclusions: readString(input, "exclusions"),
+          allowRecall: (input as Record<string, unknown>).allowRecall === true,
+          allowGit: (input as Record<string, unknown>).allowGit === true,
+        })
+        return { content: JSON.stringify(task, null, 2) }
+      },
+    },
+    {
+      name: "memory_auditor_submit",
+      options: { codemode: false },
+      description: "Worker-only: submit exactly one coverage result per assigned target, for the registered category. No bank writes.",
+      input: object({
+        taskId: { type: "string" },
+        rows: { type: "array", items: object({
+          memoryId: { type: "string" }, check: { type: "string", enum: CHECKS },
+          status: { type: "string", enum: ["clean", "finding", "blocked", "incomplete"] },
+          verdict: { type: "string", enum: ["VERIFIED", "HISTORICAL", "OUTDATED", "INCORRECT", "CONTRADICTORY", "DUPLICATE", "UNVERIFIED", "STALE_DERIVED", "LOW_SIGNAL"] },
+          claim: { type: "string" }, evidence: { type: "string" }, reason: { type: "string" },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          action: { type: "string", enum: ["keep", "invalidate", "restore", "edit", "merge", "investigate"] },
+          supportingMemoryIds: { type: "array", items: { type: "string" } }, replacement: { type: "string" }, keeper: { type: "string" },
+        }, ["memoryId", "check", "status", "verdict", "claim", "evidence", "reason", "confidence", "action"]) },
+      }, ["taskId", "rows"]),
+      async execute(input: unknown, context?: ToolContext) {
+        const { id } = session(context)
+        if (!runtime || context?.agent !== "memory-auditor-worker") throw new Error("Only a bound worker can submit a report.")
+        const rows = (input as Record<string, unknown>).rows
+        if (!Array.isArray(rows)) throw new Error("Expected structured coverage rows.")
+        const task = await runtime.tasks.submit(id, readString(input, "taskId"), rows as TaskRow[])
+        return { content: `Accepted task ${task.id}; ${task.results!.length} scoped rows. No bank changes.\n${formatTaskTable(task)}` }
+      },
+    },
+    {
+      name: "memory_auditor_report",
+      options: { codemode: false },
+      description: "Primary-only: read all accepted task tables and per-ID/check coverage. Cancel a blocked active task explicitly; cancellation preserves incomplete coverage.",
+      input: object({ runId: { type: "string" }, cancelTaskId: { type: "string" } }),
+      async execute(input: unknown, context?: ToolContext) {
+        const { id } = session(context)
+        if (!runtime || context?.agent !== "memory-auditor") throw new Error("Only the primary auditor can reconcile task reports.")
+        const cancel = readOptionalString(input, "cancelTaskId")
+        if (cancel) await runtime.tasks.cancel(id, cancel)
+        const report = await runtime.tasks.report(id, readOptionalString(input, "runId"))
+        const summary = JSON.stringify({
+          runId: report.run.id, bank: report.run.inventory.bank, revision: report.run.inventory.revision,
+          complete: report.complete, warnings: report.run.inventory.warnings, coverage: report.coverage,
+          tasks: report.tasks.map(({ results, ...task }) => ({ ...task, coverage: results?.map(({ memoryId, status }) => ({ memoryId, status })) })),
+        }, null, 2)
+        return { content: [summary, ...report.tasks.map(formatTaskTable)].join("\n\n") }
+      },
+    },
   ]
+  return tools.map((tool) => {
+    const execute = tool.execute as (input: unknown, context?: ToolContext) => Promise<{ content: string }>
+    return { ...tool, async execute(input: unknown, context?: ToolContext) {
+      const task = context?.sessionID && runtime ? await runtime.tasks.binding(context.sessionID) : undefined
+      if (context?.agent === "memory-auditor-worker" || task) {
+        if (!task || !runtime || !(await runtime.tasks.workerReadAllowed(task, tool.name, input))) {
+          throw new Error("Worker tool call lies outside its registered read-only assignment.")
+        }
+      }
+      context?.signal?.throwIfAborted()
+      return execute(input, context)
+    } }
+  })
+}
+
+function formatPlan(plan: Plan): string {
+  return JSON.stringify({
+    ...plan,
+    impact: "Edits can discard derived observations. Retained extraction must exactly match approved text/context before sources retire.",
+    recovery: "Use a fresh approved plan: restore retired source facts; reverse edits with the saved before text. Reprocessing sources may recreate retired memories. Merge retries after partial writes require explicit recovery, not inferred progress.",
+  }, null, 2)
+}
+
+function formatTaskTable(task: Assignment): string {
+  const rows = task.results ?? []
+  const findings = rows.filter((row) => row.status === "finding")
+  const counts = `task ${task.id}: findings=${findings.length}, clean=${rows.filter((row) => row.status === "clean").length}, blocked=${rows.filter((row) => row.status === "blocked").length}, incomplete=${task.memoryIds.length - rows.filter((row) => row.status === "clean" || row.status === "finding").length}`
+  if (!findings.length) return `${counts}\nNo reported in-scope findings; inspect blocked/incomplete coverage.`
+  const cell = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll("\\", "\\\\").replaceAll("|", "\\|").replaceAll("`", "\\`")
+    .replaceAll("[", "\\[").replaceAll("]", "\\]").replaceAll("!", "\\!").replace(/\r?\n/g, "<br>")
+  return [
+    counts,
+    "| Task | Memory ID | Check | Verdict | Quoted claim | Evidence | Reason | Confidence | Proposed action | Replacement / keeper |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ...findings.map((row) => `| ${[task.id, row.memoryId, row.check, row.verdict, row.claim, row.evidence, row.reason,
+      row.confidence, row.action, row.replacement ?? row.keeper ?? ""].map(cell).join(" | ")} |`),
+  ].join("\n")
 }
 
 function readString(input: unknown, key: string): string {

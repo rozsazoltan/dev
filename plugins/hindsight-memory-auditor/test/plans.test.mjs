@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { createGitEvidence } from "../src/evidence.ts"
 import { PlanStore } from "../src/plans.ts"
+import { packPlan } from "../src/audit.ts"
 
 test("git evidence stays read-only and bounded", async () => {
   const calls = []
@@ -41,31 +42,51 @@ function fakeStorage() {
   }
 }
 
-const plan = (id) => ({ id, hash: id, bank: "b", createdAt: "now", findings: [], operations: [] })
+const plan = (label) => packPlan("b", [], [{ id: `op-${label}`, kind: "invalidate", memoryId: `m-${label}`, reason: "test", before: "text" }])
 
 test("plans survive a new store instance over the same storage", async () => {
   const storage = fakeStorage()
-  await new PlanStore(storage).save("s1", plan("p1"))
-  const loaded = await new PlanStore(storage).load("s1", "p1")
-  assert.equal(loaded?.id, "p1")
+  const saved = plan("p1")
+  await new PlanStore(storage).save("s1", saved)
+  const loaded = await new PlanStore(storage).load("s1", saved.id)
+  assert.equal(loaded?.id, saved.id)
 })
 
-test("the store keeps only the last five plans", async () => {
+test("the store preserves all plans", async () => {
   const storage = fakeStorage()
   const store = new PlanStore(storage)
-  for (const id of ["a", "b", "c", "d", "e", "f"]) await store.save("s1", plan(id))
+  const saved = await Promise.all(["a", "b", "c", "d", "e", "f"].map((id) => store.save("s1", plan(id))))
   const keys = Object.keys(storage.data.get("hindsight-memory-auditor.plans.s1"))
-  assert.deepEqual(keys.sort(), ["b", "c", "d", "e", "f"])
+  assert.equal(keys.length, 6)
 })
 
-test("re-saving a plan refreshes its retention position", async () => {
+test("re-saving an immutable plan is idempotent without evicting other plans", async () => {
   const storage = fakeStorage()
   const store = new PlanStore(storage)
+  const a = plan("a")
   for (const id of ["a", "b", "c", "d", "e"]) await store.save("s", plan(id))
-  await store.save("s", plan("a"))
+  await store.save("s", a)
   await store.save("s", plan("f"))
   const keys = Object.keys(storage.data.get("hindsight-memory-auditor.plans.s"))
-  assert.deepEqual(keys.sort(), ["a", "c", "d", "e", "f"])
+  assert.equal(keys.length, 6)
+})
+
+test("JSON storage preserves full plan integrity and input/output snapshots are isolated", async () => {
+  const data = new Map()
+  const storage = {
+    get: async (key) => data.get(key),
+    set: async (key, value) => data.set(key, JSON.parse(JSON.stringify(value))),
+  }
+  const store = new PlanStore(storage)
+  const initial = packPlan("bank", [], [{ id: "op", kind: "edit", memoryId: "m", reason: "verified", before: "old", text: "new", context: undefined }])
+  const id = initial.id
+  const pending = store.save("s", initial)
+  initial.operations[0].text = "tampered during pending save"
+  await pending
+  const loaded = await store.load("s", id)
+  assert.equal(loaded.operations[0].text, "new")
+  loaded.operations[0].text = "tampered after load"
+  assert.equal((await store.load("s", id)).operations[0].text, "new")
 })
 
 test("a clear cannot land inside a pending save", async () => {
@@ -82,11 +103,12 @@ test("a clear cannot land inside a pending save", async () => {
     },
   }
   const store = new PlanStore(storage)
-  const saving = store.save("s", plan("p"))
+  const savedPlan = plan("p")
+  const saving = store.save("s", savedPlan)
   const clearing = store.clear("s")
   release()
   await Promise.all([saving, clearing])
-  assert.equal(await store.load("s", "p"), undefined)
+  assert.equal(await store.load("s", savedPlan.id), undefined)
 })
 
 test("a missing or corrupt entry yields no plan", async () => {
@@ -98,9 +120,11 @@ test("a missing or corrupt entry yields no plan", async () => {
 test("sessions do not see or clear each other's plans", async () => {
   const storage = fakeStorage()
   const store = new PlanStore(storage)
-  await store.save("a", plan("pa"))
-  await store.save("b", plan("pb"))
+  const pa = plan("pa")
+  const pb = plan("pb")
+  await store.save("a", pa)
+  await store.save("b", pb)
   await store.clear("a")
-  assert.equal(await store.load("a", "pa"), undefined)
-  assert.equal((await store.load("b", "pb"))?.id, "pb")
+  assert.equal(await store.load("a", pa.id), undefined)
+  assert.equal((await store.load("b", pb.id))?.id, pb.id)
 })

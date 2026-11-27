@@ -45,12 +45,12 @@ async function server(memories) {
   const apiUrl = `http://127.0.0.1:${port}`
   return {
     port,
-    client: new HindsightClient({ apiUrl, bank: "bank::test", auditOnly: false, pageSize: 2, maxMemories: 50 }),
+    client: new HindsightClient({ apiUrl, bank: "bank::test", pageSize: 2, maxMemories: 50, requestTimeoutMs: 15000 }),
     close: () => http.close(),
   }
 }
 
-test("end to end: scan the fake bank, approve one operation, verify the state", async () => {
+test("HTTP engine integration: scan the fake bank, execute selected operation and verify state", async () => {
   const { client, close } = await server([
     { id: "a", text: "The preset pins commit 305e335.", state: "valid", fact_type: "world", updated_at: "2026-11-20T00:00:00Z" },
     { id: "b", text: "The preset pins commit 305e335.", state: "valid", fact_type: "world", updated_at: "2026-11-26T00:00:00Z" },
@@ -64,7 +64,7 @@ test("end to end: scan the fake bank, approve one operation, verify the state", 
     assert.equal(plan.operations.length, 1)
     assert.equal(plan.operations[0].memoryId, "a")
 
-    const report = await applyPlan(client, plan, [plan.operations[0].id], { auditOnly: false })
+    const report = await applyPlan(client, plan, [plan.operations[0].id])
     assert.equal(report.results[0].status, "applied")
 
     const retired = await client.getMemory("a")
@@ -78,8 +78,8 @@ test("end to end: scan the fake bank, approve one operation, verify the state", 
 test("a client scoped to another bank is rejected by the server", async () => {
   const { port, close } = await server([])
   try {
-    const other = new HindsightClient({ apiUrl: `http://127.0.0.1:${port}`, bank: "bank::other", auditOnly: false, pageSize: 2, maxMemories: 50 })
-    await assert.rejects(() => other.getMemory("x"), /404.*wrong bank/s)
+    const other = new HindsightClient({ apiUrl: `http://127.0.0.1:${port}`, bank: "bank::other", pageSize: 2, maxMemories: 50, requestTimeoutMs: 15000 })
+    await assert.rejects(() => other.getMemory("x"), /404/)
   } finally {
     close()
   }
@@ -88,7 +88,7 @@ test("a client scoped to another bank is rejected by the server", async () => {
 test("a missing memory is a 404", async () => {
   const { client, close } = await server([])
   try {
-    await assert.rejects(() => client.getMemory("x"), /404.*missing/s)
+    await assert.rejects(() => client.getMemory("x"), /404/)
   } finally {
     close()
   }

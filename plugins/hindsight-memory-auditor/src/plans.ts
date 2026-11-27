@@ -1,14 +1,13 @@
 import type { Plan } from "./types.ts"
+import { validatePlan } from "./audit.ts"
 
 export interface StorageLike {
   get(key: string): Promise<unknown>
   set(key: string, value: unknown): Promise<void>
 }
 
-const KEEP = 5
-
 /**
- * Plans persist per session, so an approval survives a restart and one session never sees or
+ * Plans persist per session, so a plan survives a restart and one session never sees or
  * clears another session's plans.
  */
 export class PlanStore {
@@ -22,19 +21,20 @@ export class PlanStore {
   }
 
   async save(sessionID: string, plan: Plan): Promise<void> {
+    const snapshot = structuredClone(plan)
+    if (!validatePlan(snapshot)) throw new Error("Invalid plan integrity.")
     await this.#serial(sessionID, async () => {
       const plans = await this.#all(sessionID)
-      // Re-inserting keeps the newest save last in retention order.
-      delete plans[plan.id]
-      plans[plan.id] = plan
-      const ids = Object.keys(plans)
-      for (const stale of ids.slice(0, Math.max(0, ids.length - KEEP))) delete plans[stale]
+      // Persisted plans survive restarts; human approval does not.
+      delete plans[snapshot.id]
+      plans[snapshot.id] = snapshot
       await this.#storage.set(this.#key(sessionID), plans)
     })
   }
 
   async load(sessionID: string, id: string): Promise<Plan | undefined> {
-    return (await this.#all(sessionID))[id]
+    const plan = (await this.#all(sessionID))[id]
+    return plan && validatePlan(plan) ? structuredClone(plan) : undefined
   }
 
   async clear(sessionID: string): Promise<void> {
@@ -57,6 +57,6 @@ export class PlanStore {
 
   async #all(sessionID: string): Promise<Record<string, Plan>> {
     const value = await this.#storage.get(this.#key(sessionID))
-    return value && typeof value === "object" && !Array.isArray(value) ? { ...(value as Record<string, Plan>) } : {}
+    return value && typeof value === "object" && !Array.isArray(value) ? structuredClone(value as Record<string, Plan>) : {}
   }
 }
