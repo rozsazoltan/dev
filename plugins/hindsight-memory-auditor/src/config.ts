@@ -62,10 +62,9 @@ export function resolveConfig(
     apiUrl: apiUrl.replace(/\/+$/, ""),
     bank,
     token: token || undefined,
-    // Mutations stay off until the operator opts in: every applied change is still approved per plan.
-    auditOnly: options.auditOnly !== false,
     pageSize: positive(options.pageSize, 100, 500),
     maxMemories: positive(options.maxMemories, 5000, 50000),
+    requestTimeoutMs: positive(options.requestTimeoutMs, 15000, 120000),
   }
 }
 

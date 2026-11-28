@@ -12,6 +12,9 @@ const ALLOWED = new Set([
   "list",
   "memory_auditor_status",
   "memory_auditor_scan",
+  "memory_auditor_inventory",
+  "memory_auditor_assign",
+  "memory_auditor_report",
   "memory_auditor_inspect",
   "memory_auditor_evidence",
   "memory_auditor_git",
@@ -32,20 +35,13 @@ const ALLOWED = new Set([
  * barrier: this runs on every tool execution and inspects the effective agent.
  */
 export function denyReason(agentId: string | undefined, tool: string, input?: unknown): string | undefined {
-  if (agentId !== AUDITOR_AGENT) return undefined
-  // Some hosts qualify a tool name (`plugin.memory_auditor_scan`); compare the bare name too.
-  const bare = tool.split(/[./:]/).pop() ?? tool
-  if (bare === "subagent" || bare === "task") {
-    return launchedAgent(input) === WORKER_AGENT
-      ? undefined
-      : `Memory Auditor may only launch the ${WORKER_AGENT} subagent.`
+  // Only exact registered IDs establish tool identity; foreign suffix matches are unsafe.
+  if (agentId === WORKER_AGENT) {
+    return ["read", "glob", "grep", "memory_auditor_evidence", "memory_auditor_git", "memory_auditor_inspect", "memory_auditor_recall", "memory_auditor_submit"].includes(tool)
+      ? undefined : `Memory Auditor worker may not use \`${tool}\`: only registered assignment reads and report submission are permitted.`
   }
-  if (ALLOWED.has(tool) || ALLOWED.has(bare)) return undefined
-  return `Memory Auditor may not use \`${tool}\`: it audits the Hindsight bank with repository evidence only, and never writes files, runs commands, delegates or reaches the network.`
-}
-
-function launchedAgent(input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) return undefined
-  const value = (input as Record<string, unknown>).agent ?? (input as Record<string, unknown>).subagent
-  return typeof value === "string" ? value : undefined
+  if (agentId !== AUDITOR_AGENT) return undefined
+  if (tool === "subagent" || tool === "task") return "Use memory_auditor_assign so the worker is bound before it starts."
+  if (ALLOWED.has(tool)) return undefined
+  return `Memory Auditor may not use \`${tool}\`: repository reads, bound audit assignments and approved bank plans only.`
 }

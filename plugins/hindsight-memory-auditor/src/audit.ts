@@ -28,7 +28,37 @@ function digest(input: string): string {
 }
 
 function timestamp(memory: MemoryUnit): string {
-  return memory.updated_at ?? memory.mentioned_at ?? memory.date ?? ""
+  return memory.mentioned_at ?? memory.date ?? ""
+}
+
+function keeperTimestamp(memory: MemoryUnit): string {
+  return memory.updated_at ?? timestamp(memory)
+}
+
+/** Orders keepers by parsed instant; unparseable values sort last and ties break on ID. */
+function keeperOrder(left: MemoryUnit, right: MemoryUnit): number {
+  const leftAt = Date.parse(keeperTimestamp(left))
+  const rightAt = Date.parse(keeperTimestamp(right))
+  const a = Number.isNaN(leftAt) ? Number.NEGATIVE_INFINITY : leftAt
+  const b = Number.isNaN(rightAt) ? Number.NEGATIVE_INFINITY : rightAt
+  return b - a || left.id.localeCompare(right.id)
+}
+
+export function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonical(item ?? null)).join(",")}]`
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`
+  }
+  return JSON.stringify(value) ?? "null"
+}
+
+export function validatePlan(plan: Plan): boolean {
+  if (!plan || !plan.bank || !Array.isArray(plan.findings) || !Array.isArray(plan.operations)) return false
+  const ids = plan.operations.map((operation) => operation?.id)
+  if (ids.some((id) => typeof id !== "string" || !id) || new Set(ids).size !== ids.length) return false
+  const hash = digest(canonical({ bank: plan.bank, findings: plan.findings, operations: plan.operations }))
+  return plan.hash === hash && plan.id === hash.slice(0, 16)
 }
 
 /**
@@ -38,7 +68,8 @@ function timestamp(memory: MemoryUnit): string {
  */
 /** Only world and experience facts can be curated; observations are derived and read-only. */
 export function curatable(memory: MemoryUnit): boolean {
-  return memory.fact_type === "world" || memory.fact_type === "experience"
+  const type = memory.fact_type ?? memory.type
+  return type === "world" || type === "experience"
 }
 
 export function scan(memories: MemoryUnit[], options: { minTextLength?: number } = {}): Finding[] {
@@ -50,13 +81,17 @@ export function scan(memories: MemoryUnit[], options: { minTextLength?: number }
 
   const byText = new Map<string, MemoryUnit[]>()
   for (const memory of curatableValid) {
-    const key = strictKey(memory.text)
+    // A blank fact cannot be a duplicate: two empty texts say nothing.
+    if (!strictKey(memory.text)) continue
+    const key = canonical([strictKey(memory.text), memory.fact_type ?? memory.type, memory.context ?? null,
+      memory.tags ?? null, memory.mentioned_at ?? null, memory.date ?? null, memory.document_id ?? null,
+      memory.source_memory_ids ?? null, memory.source_memories ?? null, memory.observation_scopes ?? null, memory.metadata ?? null])
     if (!key) continue
     byText.set(key, [...(byText.get(key) ?? []), memory])
   }
   for (const [key, group] of byText) {
     if (group.length < 2) continue
-    const ordered = [...group].sort((left, right) => timestamp(right).localeCompare(timestamp(left)))
+    const ordered = [...group].sort(keeperOrder)
     findings.push({
       id: `dup-${digest(key).slice(0, 12)}`,
       state: "DUPLICATE",
@@ -104,14 +139,15 @@ export function scan(memories: MemoryUnit[], options: { minTextLength?: number }
 
 /** Packs a plan so its id and hash are derived from the bank and the exact operations. */
 export function packPlan(bank: string, findings: Finding[], operations: Operation[], now = new Date()): Plan {
-  const hash = digest(`${bank}\n${operations.map((operation) => `${operation.id}:${operation.before}`).join("\n")}`)
+  const payload = canonical({ bank, findings, operations })
+  const hash = digest(payload)
   return {
     id: hash.slice(0, 16),
     hash,
     bank,
     createdAt: now.toISOString(),
-    findings,
-    operations,
+    findings: structuredClone(findings),
+    operations: structuredClone(operations),
   }
 }
 
@@ -137,6 +173,8 @@ export function buildPlan(bank: string, findings: Finding[], memories: MemoryUni
         before: memory.text,
         keep: finding.keep,
         keepBefore: keeper?.text ?? "",
+        beforeSnapshot: structuredClone(memory),
+        keeperSnapshot: keeper ? structuredClone(keeper) : undefined,
       })
     }
   }

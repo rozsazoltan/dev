@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { buildPlan, normalize, scan } from "../src/audit.ts"
+import { buildPlan, normalize, scan, packPlan, validatePlan } from "../src/audit.ts"
 
 const memory = (id, text, extra = {}) => ({ id, text, state: "valid", fact_type: "world", ...extra })
 
@@ -68,4 +68,42 @@ test("buildPlan only emits operations for duplicates and is deterministic", () =
   assert.equal(first.operations[0].memoryId, "a")
   assert.equal(first.operations[0].kind, "invalidate")
   assert.equal(first.hash, second.hash)
+})
+
+test("duplicate identity ignores updated_at but honors semantic date", () => {
+  const base = memory("a", "Same fact text for planning purposes here.", { updated_at: "2026-11-20" })
+  const newer = memory("b", base.text, { updated_at: "2026-11-26" })
+  assert.equal(scan([base, newer]).some((finding) => finding.state === "DUPLICATE"), true)
+  assert.equal(scan([base, memory("c", base.text, { date: "2020-01-01" })]).some((finding) => finding.state === "DUPLICATE"), false)
+  assert.equal(scan([base, memory("d", base.text, { context: "other" })]).some((finding) => finding.state === "DUPLICATE"), false)
+  const historic = { ...base, mentioned_at: "2026-11-27", date: "2020-01-01" }
+  assert.equal(scan([historic, { ...historic, id: "e", date: "2021-01-01" }]).some((finding) => finding.state === "DUPLICATE"), false)
+  assert.equal(scan([base, { ...newer, source_memories: [{ id: "different-source" }] }]).some((finding) => finding.state === "DUPLICATE"), false)
+})
+
+test("blank fact text is never grouped as a duplicate", () => {
+  const memories = [memory("a", "   "), memory("b", "   ")]
+  assert.equal(scan(memories).some((finding) => finding.state === "DUPLICATE"), false)
+})
+
+test("keeper ordering compares parsed instants with a deterministic fallback", () => {
+  const memories = [
+    memory("offset", "Same fact text for keeper ordering here.", { updated_at: "2026-11-27T02:00:00+03:00" }),
+    memory("utc", "Same fact text for keeper ordering here.", { updated_at: "2026-11-27T00:00:00Z" }),
+    memory("missing", "Same fact text for keeper ordering here."),
+  ]
+  assert.equal(scan(memories).find((finding) => finding.state === "DUPLICATE")?.keep, "utc")
+})
+
+test("plan integrity binds keeper and context with canonical key ordering", () => {
+  const a = packPlan("b", [], [{ id: "op", kind: "edit", memoryId: "m", reason: "r", before: "x", text: "y", context: "a" }])
+  const changed = structuredClone(a)
+  changed.operations[0].context = "b"
+  assert.equal(validatePlan(a), true)
+  assert.equal(validatePlan(changed), false)
+  const reordered = packPlan("b", [], [{ context: "a", text: "y", before: "x", reason: "r", memoryId: "m", kind: "edit", id: "op" }])
+  assert.equal(a.hash, reordered.hash)
+  const keeperChanged = packPlan("b", [], [{ ...a.operations[0], keep: "new-keeper", keepBefore: "text" }])
+  assert.notEqual(a.hash, keeperChanged.hash)
+  assert.equal(validatePlan(JSON.parse(JSON.stringify(packPlan("b", [], [{ ...a.operations[0], unused: undefined }])))), true)
 })

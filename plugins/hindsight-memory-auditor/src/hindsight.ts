@@ -1,4 +1,5 @@
 import type { AuditorConfig, Inventory, MemoryUnit } from "./types.ts"
+import { createHash } from "node:crypto"
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -32,26 +33,34 @@ export interface ListResponse {
 export class HindsightClient {
   readonly #config: AuditorConfig
   readonly #fetch: FetchLike
+  readonly #signal?: AbortSignal
 
-  constructor(config: AuditorConfig, fetchImpl: FetchLike = fetch) {
+  constructor(config: AuditorConfig, fetchImpl: FetchLike = fetch, signal?: AbortSignal) {
     this.#config = config
     this.#fetch = fetchImpl
+    this.#signal = signal
   }
 
   get bank(): string {
     return this.#config.bank
   }
 
-  async listMemories(input: { limit: number; offset: number; state?: string }): Promise<ListResponse> {
+  /** Per-call clients avoid sharing mutable cancellation state across sessions. */
+  withSignal(signal?: AbortSignal): HindsightClient {
+    return new HindsightClient(this.#config, this.#fetch, signal)
+  }
+
+  async listMemories(input: { limit: number; offset: number; state?: string; factType?: string }): Promise<ListResponse> {
     const query = new URLSearchParams({ limit: String(input.limit), offset: String(input.offset) })
     if (input.state) query.set("state", input.state)
-    return this.#request<ListResponse>("GET", `/memories/list?${query}`)
+    if (input.factType) query.set("type", input.factType)
+    const response = await this.#request<ListResponse>("GET", `/memories/list?${query}`)
+    return { ...response, items: normalizeList(response) }
   }
 
   /** Banks the server knows, so a mis-resolved bank is visible before any write. */
   async banks(): Promise<string[]> {
-    const response = await this.#fetchResponse("GET", "/v1/default/banks", undefined, "/v1/default/banks")
-    const body = (await response.json()) as { banks?: Array<{ bank_id?: string }> }
+    const body = await this.#request<{ banks?: Array<{ bank_id?: string }> }>("GET", "/v1/default/banks", undefined, "/v1/default/banks")
     return (body.banks ?? []).map((bank) => bank.bank_id ?? "").filter(Boolean)
   }
 
@@ -88,13 +97,25 @@ export class HindsightClient {
 
   /** Memories that carry a document id, used to find a retained merge afterwards. */
   async byDocument(documentId: string): Promise<MemoryUnit[]> {
-    const query = new URLSearchParams({ document_id: documentId, limit: "20", offset: "0" })
-    const page = await this.#request<ListResponse>("GET", `/memories/list?${query}`)
-    return page.items ?? []
+    const result: MemoryUnit[] = []
+    for (let offset = 0; offset < this.#config.maxMemories; offset += this.#config.pageSize) {
+      const query = new URLSearchParams({ document_id: documentId, limit: String(Math.min(this.#config.pageSize, this.#config.maxMemories - offset)), offset: String(offset) })
+      const page = await this.#request<ListResponse>("GET", `/memories/list?${query}`)
+      const items = normalizeList(page)
+      if (items.some((item) => item.document_id !== documentId)) throw new Error("Document filter returned unrelated memories.")
+      result.push(...items)
+      if (items.length < Math.min(this.#config.pageSize, this.#config.maxMemories - offset) ||
+          page.total === result.length) return result
+    }
+    throw new Error("Document lookup reached its safety cap; replacement coverage is incomplete.")
   }
 
   async getMemory(memoryId: string): Promise<MemoryUnit> {
-    return this.#request<MemoryUnit>("GET", `/memories/${encodeURIComponent(memoryId)}`)
+    const memory = normalizeMemory(await this.#request<unknown>("GET", `/memories/${encodeURIComponent(memoryId)}`))
+    if (memory.id !== memoryId || !["valid", "invalidated"].includes(memory.state ?? "")) {
+      throw new Error("Invalid Hindsight detail response: target identity and explicit state are required.")
+    }
+    return memory
   }
 
   /**
@@ -111,27 +132,28 @@ export class HindsightClient {
 
   /** Pages through the whole bank up to `maxMemories`; `truncated` marks an incomplete inventory. */
   async inventory(): Promise<Inventory> {
+    const first = await this.#inventoryPages()
     const memories: MemoryUnit[] = []
-    let offset = 0
-    let truncated = false
-    for (;;) {
-      const remaining = this.#config.maxMemories - memories.length
-      if (remaining <= 0) {
-        truncated = true
-        break
-      }
-      const limit = Math.min(this.#config.pageSize, remaining)
-      const page = await this.listMemories({ limit, offset })
-      const items = (page.items ?? []).slice(0, limit)
-      memories.push(...items)
-      offset += items.length
-      if (items.length < limit) break
-      if (memories.length >= this.#config.maxMemories) {
-        // A full page at the cap means more may exist; report partial coverage.
-        truncated = true
-        break
+    const missingIds: string[] = []
+    let changed = first.changed
+    let unavailableVersions = false
+    for (const listed of first.items) {
+      try {
+        const memory = await this.getMemory(listed.id)
+        if (memory.text !== listed.text ||
+            (listed.updated_at !== undefined && memory.updated_at !== undefined && memory.updated_at !== listed.updated_at)) changed = true
+        if (listed.updated_at !== undefined && memory.updated_at === undefined) unavailableVersions = true
+        memories.push(memory)
+      } catch (error) {
+        this.#signal?.throwIfAborted()
+        // An unavailable detail is a coverage gap, not permission to silently drop a memory.
+        missingIds.push(listed.id)
+        memories.push(listed)
       }
     }
+    const last = await this.#inventoryPages()
+    changed ||= last.changed || createInventoryRevision(first.items) !== createInventoryRevision(last.items)
+    const truncated = first.truncated || last.truncated
     const valid = memories.filter((memory) => (memory.state ?? "valid") === "valid").length
     return {
       bank: this.#config.bank,
@@ -139,37 +161,119 @@ export class HindsightClient {
       valid,
       invalidated: memories.length - valid,
       truncated,
+      revision: createInventoryRevision(memories),
+      changed,
+      missingIds,
+      complete: !truncated && !changed && missingIds.length === 0,
+      warnings: [
+        "Observed inventory revision, not an atomic server snapshot.",
+        ...(unavailableVersions ? ["Detail responses omit listing update timestamps; per-record version comparison is unavailable."] : []),
+        ...(truncated ? ["Inventory reached its configured safety cap."] : []),
+        ...(changed ? ["Inventory changed or repeated IDs during collection."] : []),
+        ...(missingIds.length ? ["Some detail records could not be read; inspect missingIds."] : []),
+      ],
       memories,
     }
   }
 
-  async #request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const response = await this.#fetchResponse(method, path, body)
-    return (await response.json()) as T
+  async #inventoryPages(): Promise<{ items: MemoryUnit[]; truncated: boolean; changed: boolean }> {
+    const byId = new Map<string, MemoryUnit>()
+    let total: number | undefined
+    let changed = false
+    for (let offset = 0; offset < this.#config.maxMemories;) {
+      const limit = Math.min(this.#config.pageSize, this.#config.maxMemories - offset)
+      const page = await this.listMemories({ limit, offset })
+      const items = page.items!
+      if (items.length > limit) throw new Error("Hindsight exceeded the requested page size.")
+      if (page.total !== undefined) {
+        if (!Number.isSafeInteger(page.total) || page.total < 0) throw new Error("Invalid inventory total.")
+        if (total !== undefined && total !== page.total) changed = true
+        total = page.total
+      }
+      for (const item of items) {
+        if (byId.has(item.id)) changed = true
+        else byId.set(item.id, item)
+      }
+      offset += items.length
+      if (items.length < limit) {
+        if (total !== undefined && total !== byId.size) changed = true
+        return { items: [...byId.values()], truncated: false, changed }
+      }
+      if (offset >= this.#config.maxMemories) {
+        // A total below what was already observed is contradictory, not complete coverage.
+        if (total !== undefined && total < byId.size) changed = true
+        return { items: [...byId.values()], truncated: total === undefined || total > offset, changed }
+      }
+    }
+    return { items: [...byId.values()], truncated: true, changed }
+  }
+
+  #requestSignal(): AbortSignal {
+    const timeout = AbortSignal.timeout(this.#config.requestTimeoutMs ?? 15000)
+    return this.#signal ? AbortSignal.any([this.#signal, timeout]) : timeout
+  }
+
+  async #request<T>(method: string, path: string, body?: unknown, pathOverride?: string): Promise<T> {
+    const signal = this.#requestSignal()
+    const response = await this.#fetchResponse(method, path, body, pathOverride, signal)
+    return await abortable(response.json(), signal) as T
   }
 
   /** Sends a mutation and ignores the body, so a changed response shape cannot break a request that worked. */
   async #send(method: string, path: string, body: unknown): Promise<void> {
-    const response = await this.#fetchResponse(method, path, body)
+    const signal = this.#requestSignal()
+    const response = await this.#fetchResponse(method, path, body, undefined, signal)
     // The payload is unused; release the connection instead of leaving the body unread.
-    await response.body?.cancel().catch(() => undefined)
+    await abortable(response.body?.cancel() ?? Promise.resolve(), signal)
   }
 
-  async #fetchResponse(method: string, path: string, body?: unknown, pathOverride?: string): Promise<Response> {
+  async #fetchResponse(method: string, path: string, body: unknown, pathOverride: string | undefined, signal: AbortSignal): Promise<Response> {
+    signal.throwIfAborted()
     const headers: Record<string, string> = { accept: "application/json" }
     if (body !== undefined) headers["content-type"] = "application/json"
     if (this.#config.token) headers.authorization = `Bearer ${this.#config.token}`
     const base = pathOverride === undefined ? `/v1/default/banks/${encodeURIComponent(this.#config.bank)}` : ""
     const target = pathOverride === undefined ? `${base}${path}` : pathOverride
-    const response = await this.#fetch(`${this.#config.apiUrl}${target}`, {
+    const response = await abortable(this.#fetch(`${this.#config.apiUrl}${target}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-    })
+      signal,
+    }), signal)
     if (!response.ok) {
-      const detail = await response.text().catch(() => "")
-      throw new Error(`Hindsight ${method} ${path} failed with ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`)
+      await abortable(response.body?.cancel() ?? Promise.resolve(), signal).catch(() => undefined)
+      throw new Error(`Hindsight ${method} ${path} failed with ${response.status}`)
     }
     return response
   }
+}
+
+function normalizeMemory(value: unknown): MemoryUnit {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid Hindsight memory response")
+  const raw = value as Record<string, unknown>
+  if (typeof raw.id !== "string" || !raw.id || typeof raw.text !== "string") throw new Error("Invalid Hindsight memory response: id and text are required")
+  if (raw.fact_type !== undefined && raw.type !== undefined && raw.fact_type !== raw.type) throw new Error("Conflicting Hindsight memory types.")
+  if (raw.context !== undefined && raw.context !== null && typeof raw.context !== "string") throw new Error("Invalid memory context.")
+  return { ...raw, id: raw.id, text: raw.text, fact_type: typeof raw.fact_type === "string" ? raw.fact_type : typeof raw.type === "string" ? raw.type : undefined } as MemoryUnit
+}
+
+function normalizeList(value: ListResponse): MemoryUnit[] {
+  if (!value || !Array.isArray(value.items)) throw new Error("Invalid Hindsight memory list response")
+  return value.items.map(normalizeMemory)
+}
+
+function createInventoryRevision(memories: MemoryUnit[]): string {
+  return createHash("sha256").update(JSON.stringify([...memories].sort((a, b) => a.id.localeCompare(b.id)))).digest("hex")
+}
+
+async function abortable<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted()
+  let abort!: () => void
+  const cancelled = new Promise<never>((_, reject) => {
+    abort = () => reject(signal.reason ?? new Error("Hindsight request aborted."))
+    signal.addEventListener("abort", abort, { once: true })
+    if (signal.aborted) abort()
+  })
+  try { return await Promise.race([pending, cancelled]) }
+  finally { signal.removeEventListener("abort", abort) }
 }
