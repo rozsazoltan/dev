@@ -78,7 +78,7 @@ export default Plugin.define({
     })
 
     await ctx.tool.hook("execute.before", async (input) => {
-      if (!config.contextGuard) return
+      if (!config.contextGuard || !config.hardGate) return
       if (toolAllowedAtHardLimit(input.tool, config)) return
       const reading = await measureContext(input.sessionID, ctx.session, config)
       if (reading.threshold !== "hard") return

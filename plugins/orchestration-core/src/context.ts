@@ -95,7 +95,10 @@ export function thresholdMessage(reading: ContextReading, thresholds: Orchestrat
   if (reading.threshold === "ok") return undefined
   const value = reading.tokens?.toLocaleString("en-US") ?? "unknown"
   if (reading.threshold === "hard") {
-    return `Orchestration context gate: active context is ${value} tokens, at or above the hard limit ${thresholds.hardLimit.toLocaleString("en-US")}. Stop nonessential execution, checkpoint the plan and request state, then call \`${thresholds.compressionTool}\`. Tool calls stay blocked until compression is confirmed.`
+    const tail = thresholds.hardGate
+      ? "Tool calls stay blocked until compression is confirmed."
+      : "Tool calls are not blocked; compress now."
+    return `Orchestration context budget: active context is ${value} tokens, at or above the hard limit ${thresholds.hardLimit.toLocaleString("en-US")}. Stop nonessential execution, checkpoint the plan and request state, then call \`${thresholds.compressionTool}\`. ${tail}`
   }
   if (reading.threshold === "compress") {
     return `Orchestration context budget: ${value} tokens. Call \`${thresholds.compressionTool}\` before substantial new work and checkpoint the active plan first.`

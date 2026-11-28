@@ -95,14 +95,17 @@ failed deletion is reported and retried by the next run.
 
 ### Context budget
 
-The active context is anchored on the last completed assistant message's prompt tokens
-(`input + cache.read + cache.write`); messages after it are added as a labelled estimate at four
-characters per token. No telemetry means thresholds stay inactive and the plugin says so.
+The active context is the last completed assistant message's prompt tokens (`input + cache.read +
+cache.write`), capped at an estimate of the text actually present in the session (four characters per
+token). The cap wins when provider usage looks cumulative, and `detail` says so. No telemetry means
+thresholds stay inactive and the plugin says so.
 
 - `softLimit` (default 100000): prefers compression at the next closed chapter.
 - `compressLimit` (default 150000): injects a synthetic reminder to checkpoint and compress.
 - `hardLimit` (default 200000): `execute.before` blocks every tool except the compression tool and
-  `orchestration_*` until the measured context drops.
+  `orchestration_*` until the measured context drops. Off by default (`hardGate: false`): the message store
+  is not the provider window, so a wrong reading must never block work. Enable it only where the reported
+  usage is known to be per-request.
 
 One reminder per anchor; the cooldown defaults to ten minutes.
 
@@ -139,7 +142,8 @@ scopes, not a sandbox.
 | `projectMemory` | `true` | Enable project memory tools |
 | `temporaryMemory` | `false` | Enable temporary documents |
 | `temporaryCleanup` | `false` | Allow real temporary deletion |
-| `contextGuard` | `true` | Nudge and hard-limit tool gate |
+| `contextGuard` | `true` | Context measurement and threshold notices |
+| `hardGate` | `false` | Block non-compression tools at the hard limit |
 | `planStatus` | `true` | Report active plan |
 | `delegation` | `true` | Record delegation lanes |
 | `softLimit` / `compressLimit` / `hardLimit` | `100000` / `150000` / `200000` | Active-context thresholds |

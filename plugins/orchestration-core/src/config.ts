@@ -17,6 +17,8 @@ export interface OrchestrationConfig {
   temporaryMemory: boolean
   temporaryCleanup: boolean
   contextGuard: boolean
+  /** Enforce the hard limit by blocking tool calls. Off by default: the window cannot be measured reliably. */
+  hardGate: boolean
   planStatus: boolean
   delegation: boolean
   /** Inject the Orchestrator policy into the system prompt when OMO-Slim is installed. */
@@ -93,6 +95,7 @@ export function resolveConfig(
     temporaryMemory: options.temporaryMemory === true,
     temporaryCleanup: options.temporaryCleanup === true,
     contextGuard: options.contextGuard !== false,
+    hardGate: options.hardGate === true,
     planStatus: options.planStatus !== false,
     delegation: options.delegation !== false,
     policyInjection: options.policyInjection !== false,
