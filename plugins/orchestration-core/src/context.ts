@@ -57,19 +57,20 @@ export async function measureContext(sessionID: string, source: ContextSource, t
   const windowChars = messages.reduce((total, message) => total + estimateChars(message), 0)
   const windowTokens = Math.ceil(windowChars / CHARS_PER_TOKEN)
   const anchored = anchorTokens + Math.ceil(estimatedChars / CHARS_PER_TOKEN)
-  // A reported anchor far above the text actually in the window is cumulative or stale usage, not the
-  // live prompt. Fall back to the window estimate instead of blocking every tool on a wrong reading.
-  const plausible = windowTokens > 0 && anchored <= windowTokens * 2 && anchored >= windowTokens * 0.2
-  const tokens = plausible ? anchored : Math.max(windowTokens, Math.ceil(estimatedChars / CHARS_PER_TOKEN))
+  // Only the text actually present in the window can be verified here. A provider-reported anchor is
+  // cumulative on some hosts, so it is capped by the window estimate instead of tripping a hard gate
+  // on a number the transcript cannot support.
+  const capped = windowTokens > 0 && anchored > windowTokens
+  const tokens = windowTokens > 0 ? Math.min(anchored, windowTokens) : anchored
   return {
     tokens,
-    source: plausible && !tail.length ? "measured" : "estimated",
+    source: !capped && !tail.length ? "measured" : "estimated",
     anchorAt,
     estimatedChars,
     threshold: classify(tokens, thresholds),
-    detail: plausible
-      ? `anchor ${anchorTokens} tokens${anchorAt ? ` at ${anchorAt}` : ""} plus ${tail.length} newer message(s) (~${estimatedChars} chars).`
-      : `anchor ${anchorTokens} tokens is implausible against ~${windowTokens} tokens of message text; using the window estimate (~${windowChars} chars).`,
+    detail: capped
+      ? `anchor ${anchorTokens} tokens exceeds ~${windowTokens} tokens of message text; capped at the window estimate (~${windowChars} chars).`
+      : `anchor ${anchorTokens} tokens${anchorAt ? ` at ${anchorAt}` : ""} plus ${tail.length} newer message(s) (~${estimatedChars} chars).`,
   }
 }
 
