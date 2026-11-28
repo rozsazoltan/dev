@@ -1,0 +1,37 @@
+{
+  "name": "@rozsazoltan/opencode-orchestration-core",
+  "version": "0.1.0",
+  "description": "OpenCode V2 plugin that enforces deterministic orchestration rules: prompt registry, memory policy, context budget, planning and delegation status.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "bin": {
+    "orchestration-purge-temporary": "./src/purge-cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "purge-temporary": "node --experimental-strip-types src/purge-cli.ts"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "hindsight",
+    "orchestration",
+    "memory"
+  ]
+}
