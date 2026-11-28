@@ -12,6 +12,7 @@
 .worktrees/
 .slim/
 plugins/opencode-instructions/node_modules/
+plugins/opencode-attachments/node_modules/
 **/.opencode/logs/
 **/.opencode/cache/
 **/.snip/
