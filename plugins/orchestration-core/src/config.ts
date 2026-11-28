@@ -19,6 +19,10 @@ export interface OrchestrationConfig {
   contextGuard: boolean
   planStatus: boolean
   delegation: boolean
+  /** Inject the Orchestrator policy into the system prompt when OMO-Slim is installed. */
+  policyInjection: boolean
+  /** Overrides the bundled policy text; the append file is expected to become empty. */
+  policyText?: string
   /** Active-context thresholds in tokens. */
   softLimit: number
   compressLimit: number
@@ -91,6 +95,8 @@ export function resolveConfig(
     contextGuard: options.contextGuard !== false,
     planStatus: options.planStatus !== false,
     delegation: options.delegation !== false,
+    policyInjection: options.policyInjection !== false,
+    policyText: typeof options.policyText === "string" && options.policyText.trim() ? options.policyText : undefined,
     softLimit,
     compressLimit,
     hardLimit,

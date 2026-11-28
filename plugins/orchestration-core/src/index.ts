@@ -3,6 +3,7 @@ import { resolveConfig } from "./config.ts"
 import { measureContext, thresholdMessage, toolAllowedAtHardLimit } from "./context.ts"
 import { HindsightClient } from "./hindsight.ts"
 import { MemoryManager } from "./memory.ts"
+import { DEFAULT_POLICY, omoSlimAvailable, POLICY_DESCRIPTION } from "./policy.ts"
 import { isSyntheticPrompt, Registry } from "./registry.ts"
 import { flushOutbox, StateStore } from "./state.ts"
 import { createTools } from "./tools.ts"
@@ -58,6 +59,18 @@ export default Plugin.define({
         description: "Orchestration context budget",
         resume: false,
       }).catch(() => undefined)
+    })
+
+    await ctx.session.hook("context", async (input) => {
+      if (!config.policyInjection) return
+      // Only inject where the append belongs: the OMO-Slim Orchestrator prompt.
+      if (!omoSlimAvailable(projectDir)) return
+      if (input.system.some((part) => part.metadata?.description === POLICY_DESCRIPTION)) return
+      input.system.push({
+        type: "text",
+        text: config.policyText ?? DEFAULT_POLICY,
+        metadata: { description: POLICY_DESCRIPTION },
+      })
     })
 
     await ctx.tool.transform((editor) => {

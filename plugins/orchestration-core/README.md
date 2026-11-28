@@ -106,6 +106,18 @@ characters per token. No telemetry means thresholds stay inactive and the plugin
 
 One reminder per anchor; the cooldown defaults to ten minutes.
 
+### Orchestrator policy injection
+
+The deterministic half of the Orchestrator rules is enforced by this plugin, so the append that carries
+them does not need to repeat it. When OMO-Slim is installed — detected from
+`oh-my-opencode-slim.json(c)` or a plugin entry naming it — the plugin appends one system part,
+`description: "orchestration-policy"`, to every session request through `session.hook("context")`.
+
+The injected text keeps only what code cannot enforce: what to delegate, how to judge a child's report,
+how to interpret the user's scope, how to reconcile before final checks, and how to report. The OMO-Slim
+append file is expected to become empty; a `policyText` option overrides the bundled text without editing
+installed OMO-Slim files. The part is added once per request, so it never accumulates in the transcript.
+
 ### Planning and delegation
 
 `orchestration_plan` reads `.planning/.active_plan` and the named `task_plan.md`. It never writes or
@@ -133,6 +145,8 @@ scopes, not a sandbox.
 | `softLimit` / `compressLimit` / `hardLimit` | `100000` / `150000` / `200000` | Active-context thresholds |
 | `compressionTool` | `compress` | Tool kept available at the hard limit |
 | `maxPromptChars` | `16000` | Reserved for prompt truncation policy |
+| `policyInjection` | `true` | Inject the Orchestrator policy when OMO-Slim is installed |
+| `policyText` | bundled | Overrides the injected policy text |
 | `tempTtlHours` | `24` | Default temporary TTL, maximum 48 |
 | `nudgeCooldownMs` | `600000` | Minimum gap between budget reminders |
 
@@ -147,7 +161,8 @@ scopes, not a sandbox.
 | Project memory replace with history | Supported | Same document ID, `update_mode: replace` |
 | Temporary retention | Implemented, disabled | Needs a real scheduler and proven isolation |
 | Independent expiry while OpenCode is closed | External | `purge-cli.ts` for cron/systemd |
-| Context measurement | Supported when usage exists | Anchor on last assistant tokens; tail is estimated |
+| Context measurement | Supported when usage exists | Anchor on last assistant tokens; tail is estimated; an implausible anchor falls back to a window estimate |
+| Policy injection | Supported | One system part per request when OMO-Slim is detected |
 | Hard-limit blocking | Tool execution only | Text-only responses cannot be blocked |
 | Plan status | Supported | Read-only |
 | Delegation scope ledger | Supported | Declared scopes only; not a sandbox |
@@ -161,6 +176,7 @@ scopes, not a sandbox.
   still surface registry or temporary text; keep temporary memory disabled until that is resolved.
 - Registry writes trigger Hindsight extraction. Status transitions re-retain the document and may
   create new derived observations; the record itself stays authoritative.
+- OMO-Slim detection is a heuristic over installed configuration; a renamed plugin entry is not detected.
 - Context measurement depends on assistant token usage; before the first response, or without
   usage, no threshold is enforced.
 - Blocking applies to tool calls. A model can still answer without tools above the hard limit.

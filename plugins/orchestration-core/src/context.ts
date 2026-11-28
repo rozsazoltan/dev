@@ -54,14 +54,22 @@ export async function measureContext(sessionID: string, source: ContextSource, t
   }
   const tail = messages.slice(anchorIndex + 1)
   const estimatedChars = tail.reduce((total, message) => total + estimateChars(message), 0)
-  const tokens = anchorTokens + Math.ceil(estimatedChars / CHARS_PER_TOKEN)
+  const windowChars = messages.reduce((total, message) => total + estimateChars(message), 0)
+  const windowTokens = Math.ceil(windowChars / CHARS_PER_TOKEN)
+  const anchored = anchorTokens + Math.ceil(estimatedChars / CHARS_PER_TOKEN)
+  // A reported anchor far above the text actually in the window is cumulative or stale usage, not the
+  // live prompt. Fall back to the window estimate instead of blocking every tool on a wrong reading.
+  const plausible = windowTokens > 0 && anchored <= windowTokens * 2 && anchored >= windowTokens * 0.2
+  const tokens = plausible ? anchored : Math.max(windowTokens, Math.ceil(estimatedChars / CHARS_PER_TOKEN))
   return {
     tokens,
-    source: tail.length ? "estimated" : "measured",
+    source: plausible && !tail.length ? "measured" : "estimated",
     anchorAt,
     estimatedChars,
     threshold: classify(tokens, thresholds),
-    detail: `anchor ${anchorTokens} tokens${anchorAt ? ` at ${anchorAt}` : ""} plus ${tail.length} newer message(s) (~${estimatedChars} chars).`,
+    detail: plausible
+      ? `anchor ${anchorTokens} tokens${anchorAt ? ` at ${anchorAt}` : ""} plus ${tail.length} newer message(s) (~${estimatedChars} chars).`
+      : `anchor ${anchorTokens} tokens is implausible against ~${windowTokens} tokens of message text; using the window estimate (~${windowChars} chars).`,
   }
 }
 
